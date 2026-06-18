@@ -77,6 +77,23 @@ function build() {
 
   const kb = (Buffer.byteLength(html, "utf8") / 1024).toFixed(0);
   console.log("Built " + path.relative(ROOT, OUT) + " (" + kb + " KB)");
+
+  // 5) Copy the optional "standalone app" launchers next to the HTML so the
+  //    dist/ folder is a ready-to-distribute bundle. These open the offline
+  //    file in its own app window (no browser chrome); the app still runs by
+  //    double-clicking the HTML directly if a user prefers.
+  const launchSrc = path.join(SRC, "launchers");
+  if (fs.existsSync(launchSrc)) {
+    for (const name of fs.readdirSync(launchSrc)) {
+      const from = path.join(launchSrc, name);
+      const to = path.join(DIST, name);
+      fs.copyFileSync(from, to);
+      if (name.endsWith(".command") || name.endsWith(".sh")) {
+        try { fs.chmodSync(to, 0o755); } catch (e) {}
+      }
+      console.log("Copied launcher " + name);
+    }
+  }
 }
 
 build();
