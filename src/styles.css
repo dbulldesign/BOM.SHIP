@@ -702,3 +702,24 @@
     .stamp{width:100%}
     .opt-tools{margin-left:0}
   }
+
+  /* ===== Version badge & update banner ===== */
+  .ver-badge{margin-left:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;
+    color:var(--ink-soft,#5b6470);background:transparent;border:1px solid var(--rule-dark,#cbd2da);
+    border-radius:999px;padding:3px 9px;cursor:pointer;vertical-align:middle;transition:all .15s}
+  .ver-badge:hover{border-color:var(--accent,#1763d6);color:var(--accent,#1763d6)}
+  .ver-badge.has-update{color:#fff;background:#1763d6;border-color:#1763d6}
+  body.dark .ver-badge{color:#9aa4b2;border-color:#33404f}
+  body.dark .ver-badge:hover{color:#7fb0ff;border-color:#7fb0ff}
+
+  .update-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:#103a78;color:#eaf1ff;padding:10px 16px;font-size:13.5px;
+    border-bottom:1px solid #0c2c5c}
+  .update-banner b{color:#fff}
+  .update-banner .upd-note{color:#bcd2f4;font-size:12px}
+  .update-banner .upd-dl{margin-left:auto;background:#2f7bff;color:#fff;text-decoration:none;
+    font-weight:600;padding:7px 16px;border-radius:6px;border:0;cursor:pointer;font-size:13px}
+  .update-banner .upd-dl:hover{background:#4a8dff}
+  .update-banner .upd-x{background:transparent;border:0;color:#bcd2f4;font-size:20px;
+    line-height:1;cursor:pointer;padding:0 4px}
+  .update-banner .upd-x:hover{color:#fff}

@@ -1,5 +1,71 @@
 "use strict";
 
+/* ================= App version & update check =================
+ * APP_VERSION is the version baked into THIS built file. The app compares it
+ * against the latest GitHub Release tag (e.g. "v1.2.0"). When a newer release
+ * exists and the machine is online, a banner offers a direct download of the
+ * new .html asset — no GitHub page, the file lands in the user's Downloads.
+ * Offline use is unaffected: the check fails silently with no network.
+ *
+ * To publish a new version:
+ *   1) bump APP_VERSION below, 2) `node build.js`, commit,
+ *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
+ */
+const APP_VERSION = "1.0.0";
+const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
+const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
+
+function parseVer(s){ return String(s||"").replace(/^v/i,"").trim().split(".").map(n=>parseInt(n,10)||0); }
+function verCmp(a,b){
+  const pa=parseVer(a), pb=parseVer(b), len=Math.max(pa.length,pb.length);
+  for(let i=0;i<len;i++){ const d=(pa[i]||0)-(pb[i]||0); if(d) return d>0?1:-1; }
+  return 0;
+}
+async function checkForUpdates(manual){
+  const badge=document.getElementById('verBadge');
+  if(manual && badge) badge.textContent="Checking…";
+  try{
+    const res=await fetch(UPDATE_API,{headers:{Accept:"application/vnd.github+json"},cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data=await res.json();
+    const latest=data.tag_name||"";
+    if(latest && verCmp(latest,APP_VERSION)>0){
+      // Prefer the .html release asset so "Download" pulls the actual file directly.
+      const assets=Array.isArray(data.assets)?data.assets:[];
+      const htmlAsset=assets.find(a=>/\.html?$/i.test(a.name||"")) || assets[0];
+      const dlUrl=(htmlAsset&&htmlAsset.browser_download_url) || data.html_url;
+      const dlName=(htmlAsset&&htmlAsset.name) || "lighting-bom-estimator.html";
+      showUpdateBanner(latest,dlUrl,dlName);
+      if(badge){ badge.textContent="v"+APP_VERSION+" · update"; badge.classList.add('has-update'); }
+    }else{
+      if(manual) toast("You're on the latest version (v"+APP_VERSION+").");
+      if(badge){ badge.textContent="v"+APP_VERSION; badge.classList.remove('has-update'); }
+    }
+  }catch(e){
+    if(manual) toast("Couldn't check for updates — are you online?");
+    if(badge) badge.textContent="v"+APP_VERSION;
+  }
+}
+function showUpdateBanner(ver,dlUrl,dlName){
+  let b=document.getElementById('updateBanner');
+  if(!b){
+    b=document.createElement('div');
+    b.id='updateBanner'; b.className='update-banner no-print';
+    document.body.insertBefore(b,document.body.firstChild);
+  }
+  b.innerHTML =
+    '<span>A newer version <b>'+esc(ver)+'</b> is available (you have v'+APP_VERSION+').'+
+    ' <span class="upd-note">Downloads the new file — save it over your old one, then reopen.</span></span>'+
+    '<a class="upd-dl" href="'+esc(dlUrl)+'" download="'+esc(dlName)+'">Download v'+esc(ver.replace(/^v/i,''))+'</a>'+
+    '<button class="upd-x" title="Dismiss" onclick="this.parentNode.remove()">×</button>';
+}
+(function initVersionBadge(){
+  const badge=document.getElementById('verBadge');
+  if(badge) badge.textContent="v"+APP_VERSION;
+  // Quiet auto-check on launch, only when online; never blocks offline use.
+  if(navigator.onLine) setTimeout(()=>checkForUpdates(false),1500);
+})();
+
 /* ================= Theme ================= */
 function applyTheme(dark){
   document.body.classList.toggle('dark', dark);
