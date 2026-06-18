@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lighting BOM Estimator</title>
+<style>
+/* INJECT:CSS */
+</style>
+</head>
+<body>
+
+<div class="app-title no-print">
+  <h1>Lighting BOM Estimator</h1>
+  <span class="sub">Fixtures · Controls · Options</span>
+  <div class="viewswitch no-print" id="viewSwitch">
+    <button class="vs-btn active" id="vsEstimate" onclick="setView('estimate')">Estimate</button>
+    <button class="vs-btn" id="vsShipping" onclick="setView('shipping')">Procurement &amp; Shipping</button>
+    <button class="vs-btn" id="vsAdvice" onclick="setView('advice')">Ship Advice</button>
+  </div>
+</div>
+
+<div class="titleblock">
+  <div class="tb-cell"><span class="tb-label">Company</span>
+    <input id="projCompany" placeholder="Your company" oninput="state.company=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Project</span>
+    <input id="projName" placeholder="Project name" oninput="state.name=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Job Code</span>
+    <input id="projJobCode" placeholder="Job code" oninput="state.jobCode=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Client / GC</span>
+    <input id="projClient" placeholder="Client" oninput="state.client=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Prepared by</span>
+    <input id="projBy" placeholder="Your name" oninput="state.preparedBy=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Date</span>
+    <input id="projDate" class="num" oninput="state.date=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Tax rate %</span>
+    <input id="projTax" class="num" inputmode="decimal" oninput="state.taxRate=numOr(this.value,0);markDirty();updateTaxDisplays()" onblur="render()"></div>
+  <div class="tb-cell"><span class="tb-label">Tax location</span>
+    <input id="projTaxLoc" list="usStatesList" placeholder="State / country" autocomplete="off" oninput="state.taxLocation=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Tax verified</span>
+    <input id="projTaxDate" type="date" class="num" oninput="state.taxCheckedDate=this.value;markDirty()"></div>
+  <div class="tb-cell tb-actions no-print">
+    <button class="ghost" onclick="newProject()">New</button>
+    <button class="ghost" onclick="openClick()">Open…</button>
+    <button class="primary" onclick="saveProject()">Save</button>
+    <button class="ghost" onclick="saveProject(true)">Save as…</button>
+    <button class="ghost" onclick="showBackups()" title="Local autosave backups">Backups</button>
+    <button class="ghost" onclick="exportCSV()">CSV</button>
+    <button class="ghost" onclick="exportEstimateXLSX()">Excel</button>
+    <button class="ghost" onclick="printEstimate()">Print / PDF</button>
+    <button class="theme-btn no-print" id="themeBtn" onclick="toggleTheme()" title="Toggle light / dark mode">🌙</button>
+    <span id="saveStamp" class="save-stamp"></span>
+    <input type="file" id="fileOpen" accept=".json,.lbom" style="display:none" onchange="openProject(this)">
+  </div>
+</div>
+<datalist id="usStatesList"></datalist>
+<div class="beam"></div>
+
+<div id="modalBackdrop" class="modal-backdrop" style="display:none" onclick="modalCancel()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h4 id="modalTitle">Are you sure?</h4>
+    <p id="modalMsg"></p>
+    <div class="modal-btns">
+      <button class="ghost" onclick="modalCancel()">Cancel</button>
+      <button class="danger" id="modalConfirmBtn" onclick="modalConfirm()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="recents no-print" id="recents"></div>
+
+<div id="backupsBackdrop" class="modal-backdrop" style="display:none" onclick="hideBackups()">
+  <div class="modal modal-wide" onclick="event.stopPropagation()">
+    <h4>Local autosave backups</h4>
+    <p class="backups-note">Automatic browser-local snapshots taken as you work. These are separate from your saved .json files and live only in this browser.</p>
+    <div id="backupsList"></div>
+    <div class="modal-btns">
+      <button class="ghost" onclick="clearAutosaves()">Clear all</button>
+      <button class="ghost" onclick="hideBackups()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="printBanner" class="print-only"></div>
+
+<div id="estimateView">
+  <div class="tabs" id="tabs"></div>
+  <div class="optionpane" id="pane"></div>
+  <div class="cmp-panel" id="compare"></div>
+  <p class="hint no-print">Tip: press <b>Enter</b> in the last row of a table to add a new part. Markup left blank on a row uses that section's default markup. <b>Save</b> writes back to the same project file (Ctrl+S); <b>Save as…</b> picks a new name or location. Recent projects are remembered by this browser on this computer — the saved .json files are still the master copies you can share or back up.</p>
+</div>
+
+<div id="shippingView" style="display:none"></div>
+<div id="adviceView" style="display:none"></div>
+
+<div class="toast" id="toast"></div>
+
+<!-- INJECT:VENDOR -->
+<!-- INJECT:APP -->
+</body>
+</html>
