@@ -237,6 +237,15 @@ function cost2(n){ return numOr(n,0).toFixed(2); }
 function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
 
+/* Focus Lighting logo for printed/exported documents. build.js replaces the token
+   below with a base64 data URI of src/assets/focus-logo.png. Until built (or if the
+   asset is missing) the token remains, so logoImg() renders nothing. */
+const LOGO_DATA_URI = "__LOGO_DATA_URI__";
+function logoImg(){
+  return (LOGO_DATA_URI && !LOGO_DATA_URI.startsWith("__"))
+    ? `<img class="doclogo" src="${LOGO_DATA_URI}" alt="Focus Lighting">` : "";
+}
+
 function rowCalc(row, defMarkup){
   const mk = (row.markup===null||row.markup==="")? defMarkup : numOr(row.markup,0);
   const unitSell = Math.ceil(row.unitCost*(1+mk/100));   // =ROUNDUP(UNIT*MARKUP,0)
@@ -541,7 +550,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       ${tagCell}
       <td style="width:120px"><input value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
       <td style="min-width:170px"><input value="${esc(r.desc)}" placeholder="Part description" ${da} data-f="desc"></td>
-      <td style="width:130px"><input value="${esc(r.part)}" placeholder="Part number" style="font-family:var(--mono)" ${da} data-f="part"></td>
+      <td style="width:130px"><input class="partno" value="${esc(r.part)}" placeholder="Part number" title="${esc(r.part)}" style="font-family:var(--mono)" ${da} data-f="part"></td>
       <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>
       ${mkCell(r.markup, da, 'col-markup')}
       <td class="calc" style="width:88px">${money(c.unitSell)}</td>
@@ -566,7 +575,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         <td class="col-tag" style="width:118px"></td>
         <td style="width:120px"><input value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
         <td style="min-width:170px"><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Accessory (louver, lens, filter…)" ${da} data-f="accdesc"></span></td>
-        <td style="width:130px"><input value="${esc(a.part)}" placeholder="Part number" style="font-family:var(--mono)" ${da} data-f="accpart"></td>
+        <td style="width:130px"><input class="partno" value="${esc(a.part)}" placeholder="Part number" title="${esc(a.part)}" style="font-family:var(--mono)" ${da} data-f="accpart"></td>
         <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(a.unitCost)}" ${da} data-f="accunitCost"></td>
         <td class="col-markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
         <td class="calc" style="width:88px">${money(ac.unitSell)}</td>
@@ -875,7 +884,7 @@ function coSectionTable(co, kind, label){
       <td style="width:78px"><input value="${esc(r.type)}" placeholder="F1" ${da} data-cof="type"></td>
       <td style="width:120px"><input value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-cof="mfr"></td>
       <td style="min-width:160px"><input value="${esc(r.desc)}" placeholder="Description" ${da} data-cof="desc"></td>
-      <td style="width:120px"><input value="${esc(r.part)}" placeholder="Part #" style="font-family:var(--mono)" ${da} data-cof="part"></td>
+      <td style="width:120px"><input class="partno" value="${esc(r.part)}" placeholder="Part #" title="${esc(r.part)}" style="font-family:var(--mono)" ${da} data-cof="part"></td>
       <td style="width:84px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-cof="unitCost"></td>
       <td style="width:70px"><input class="num${(r.markup===null||r.markup==='')?' mk-inherit':''}" inputmode="decimal" value="${(r.markup===null||r.markup==='')?'':pct2x(r.markup)}" placeholder="${pct2x(dm)}" ${da} data-cof="markup"></td>
       <td class="calc" style="width:88px">${money(c.unitSell)}</td>
@@ -1392,6 +1401,46 @@ async function delOption(){
    stable id; logistics data (PO, dates, tracking, invoice) lives in state.shipMeta
    keyed by that row id. Editing the BOM (qty, part, price, markup) flows straight
    through to the schedule. */
+/* Tracking links — turn a typed carrier (Shipper/Via box) + tracking # into a
+   clickable URL. Big-4 carriers get direct deep-links; an unrecognized typed
+   carrier (or an undetectable number) falls back to a web search so it's still
+   clickable. When the carrier box is blank we sniff it from the number format. */
+function carrierKey(carrier){
+  const c = String(carrier||'').toLowerCase().replace(/[^a-z]/g,'');
+  if(!c) return '';
+  if(c.includes('ups')) return 'ups';
+  if(c.includes('fedex')) return 'fedex';
+  if(c.includes('usps')||c.includes('postal')||c.includes('mail')) return 'usps';
+  if(c.includes('dhl')) return 'dhl';
+  return '';
+}
+function detectCarrier(tracking){
+  const t = String(tracking||'').toUpperCase().replace(/\s+/g,'');
+  if(!t) return '';
+  if(/^1Z[0-9A-Z]{16}$/.test(t)) return 'ups';
+  if(/^(94|93|92|95|420)\d{18,}$/.test(t)) return 'usps';   // USPS Intelligent Mail
+  if(/^[A-Z]{2}\d{9}US$/.test(t)) return 'usps';            // USPS international
+  if(/^(\d{12}|\d{15}|\d{20}|\d{22})$/.test(t)) return 'fedex';
+  if(/^\d{10,11}$/.test(t)) return 'dhl';
+  return '';
+}
+function trackingUrl(carrier, tracking){
+  const t = String(tracking||'').trim();
+  if(!t) return '';
+  const enc = encodeURIComponent(t);
+  const typed = String(carrier||'').trim();
+  let key = carrierKey(typed);
+  if(!key && !typed) key = detectCarrier(t);   // only sniff the number when nothing was typed
+  switch(key){
+    case 'ups':   return `https://www.ups.com/track?loc=en_US&tracknum=${enc}`;
+    case 'fedex': return `https://www.fedex.com/fedextrack/?trknbr=${enc}`;
+    case 'usps':  return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${enc}`;
+    case 'dhl':   return `https://www.dhl.com/us-en/home/tracking.html?tracking-id=${enc}&submit=1`;
+  }
+  const q = typed ? `${typed} tracking ${t}` : `track package ${t}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+}
+
 const SHIP_FIELDS = [
   {k:'po',        label:'PO #',           type:'text', w:110},
   {k:'orderDate', label:'Order date',     type:'date', w:130},
@@ -1534,7 +1583,7 @@ function setMetaField(rowId, k, v){
   const m = getMeta(rowId);
   m[k] = v;
   markDirty();
-  if(k==='invoiceId') renderShipping();
+  if(k==='invoiceId'||k==='tracking'||k==='shipper') renderShipping();
 }
 /* select/deselect all accessory ids belonging to a LOT */
 function toggleLot(accIds, on){
@@ -1744,6 +1793,12 @@ function renderShipping(){
     const fixedCells = SHIP_FIELDS.map(f=>{
       const cls = f.type==='date' ? 'date' : '';
       const ph = f.type==='date' ? 'mm/dd/yyyy' : '';
+      if(f.k==='tracking'){
+        const url = trackingUrl(m.shipper, m.tracking);
+        const link = url ? `<a class="trk-link no-print" href="${esc(url)}" target="_blank" rel="noopener" title="Track shipment">↗</a>` : '';
+        return `<td class="trk-cell" style="min-width:${f.w}px"><input value="${esc(m[f.k]||'')}" placeholder="${ph}"
+          onchange="setMetaField('${l.id}','${f.k}',this.value)">${link}</td>`;
+      }
       return `<td style="min-width:${f.w}px"><input class="${cls}" value="${esc(m[f.k]||'')}" placeholder="${ph}"
         onchange="setMetaField('${l.id}','${f.k}',this.value)"></td>`;
     }).join('');
@@ -2172,13 +2227,15 @@ function printShipSchedule(){
     const m=l.meta||{}; const st=shipStatus(m)[0];
     const descCell = l.isAccessory ? `<td class="acc">↳ ${esc2(l.desc)}</td>` : `<td>${esc2(l.desc)}</td>`;
     const cat = l.isAccessory ? 'Accessory' : l.kind;
+    const tUrl = trackingUrl(m.shipper, m.tracking);
+    const trkCell = m.tracking ? (tUrl?`<a href="${esc(tUrl)}">${esc2(m.tracking)}</a>`:esc2(m.tracking)) : '';
     return `<tr${l.isAccessory?' class="accrow"':''}>
       <td>${esc2(l.optName)}</td><td>${esc2(cat)}</td><td>${esc2(l.type)}</td>
       <td>${esc2(l.mfr)}</td>${descCell}<td class="mono">${esc2(l.part)}</td>
       <td class="r">${l.qty}</td><td class="r">${money(numOr(l.sold,0))}</td><td>${st}</td>
       <td>${esc2(m.po)}</td><td>${esc2(m.orderDate)}</td><td>${esc2(m.recvDate)}</td>
       <td>${esc2(m.estShip)}</td><td>${esc2(m.shipDate)}</td><td>${esc2(m.shipper)}</td>
-      <td class="mono">${esc2(m.tracking)}</td><td>${esc2(m.delivery)}</td><td>${esc2(m.comments)}</td>
+      <td class="mono">${trkCell}</td><td>${esc2(m.delivery)}</td><td>${esc2(m.comments)}</td>
       <td>${esc2((state.invoices.find(v=>v.id===m.invoiceId)||{}).name||'')}</td>
     </tr>`;
   }).join('');
@@ -2209,9 +2266,12 @@ function printShipSchedule(){
       td.acc{padding-left:14px;color:#555}
       .sum{font-size:12px;font-weight:bold;text-align:right;margin:6px 0 18px}
       h2{font-size:12px;border-bottom:2px solid #20242C;padding-bottom:3px;margin:18px 0 6px}
+      a{color:#1558b0;text-decoration:underline}
+      .dochead{display:flex;align-items:center;gap:14px;margin:0 0 6px}
+      .doclogo{height:46px;width:auto;display:block}
       @media print{body{margin:8mm}@page{size:landscape}}
     </style></head><body>
-    <h1>${esc2(state.name||'Lighting Project')} — Shipping &amp; Procurement Schedule</h1>
+    <div class="dochead">${logoImg()}<h1>${esc2(state.name||'Lighting Project')} — Shipping &amp; Procurement Schedule</h1></div>
     <div class="meta">
       ${state.client?`<b>Client:</b> ${esc2(state.client)} &nbsp;·&nbsp; `:''}
       <b>Scope:</b> ${esc2(filterLabel)} &nbsp;·&nbsp;
@@ -2265,7 +2325,7 @@ function delAdvice(id){
 function setAdviceField(id,k,v){
   const a = state.shipAdvices.find(x=>x.id===id); if(!a) return;
   a[k]=v; markDirty();
-  if(k==='addressId') renderAdvice();
+  if(k==='addressId'||k==='via'||k==='tracking') renderAdvice();
 }
 /* Save the current advice's address block as a reusable saved address */
 function saveAdviceAddress(id){
@@ -2426,7 +2486,10 @@ function renderAdvice(){
         <div class="adv-field"><label>Via</label>
           <input value="${esc(a.via)}" placeholder="Carrier" onchange="setAdviceField('${a.id}','via',this.value)"></div>
         <div class="adv-field"><label>Tracking #</label>
-          <input value="${esc(a.tracking)}" onchange="setAdviceField('${a.id}','tracking',this.value)"></div>
+          <div class="adv-trk">
+            <input value="${esc(a.tracking)}" onchange="setAdviceField('${a.id}','tracking',this.value)">
+            ${trackingUrl(a.via,a.tracking)?`<a class="trk-link no-print" href="${esc(trackingUrl(a.via,a.tracking))}" target="_blank" rel="noopener" title="Track shipment">Track ↗</a>`:''}
+          </div></div>
       </div>
 
       <div class="adv-items">
@@ -2718,8 +2781,13 @@ function printEstimate(){
     if(state.date) meta.push(esc(state.date));
     if(opt) meta.push('Option: '+esc(opt.name)+(opt.approved?' (Approved)':''));
     banner.innerHTML = `<div class="print-banner">
-      ${state.company?`<div class="pb-co">${esc(state.company)}</div>`:''}
-      <div class="pb-proj">${esc(state.name||'Lighting Bill of Materials')}</div>
+      <div class="pb-head">
+        ${logoImg()}
+        <div class="pb-titles">
+          ${state.company?`<div class="pb-co">${esc(state.company)}</div>`:''}
+          <div class="pb-proj">${esc(state.name||'Lighting Bill of Materials')}</div>
+        </div>
+      </div>
       <div class="pb-meta">${meta.join(' &nbsp;·&nbsp; ')}</div>
     </div>`;
   }
@@ -2738,9 +2806,11 @@ function printAdvices(){
       return `<tr><td class="r">${l.qty}</td><td>${esc2(l.kind)}</td><td>${esc2(l.type)}</td>
         <td>${esc2(l.mfr)}</td><td class="mono">${esc2(l.part)}</td><td>${esc2(l.desc)}</td></tr>`;
     }).join('');
+    const tUrl = trackingUrl(a.via, a.tracking);
+    const trk = a.tracking ? ('Tracking: '+(tUrl?`<a href="${esc(tUrl)}">${esc2(a.tracking)}</a>`:esc2(a.tracking))) : '';
     return `<div class="adv">
       <div class="advhead"><div class="sn">${esc2(a.shipmentName)}</div>
-        <div class="trk">${a.tracking?('Tracking: '+esc2(a.tracking)):''}</div></div>
+        <div class="trk">${trk}</div></div>
       <div class="addr">
         <div>${esc2(a.attn)}</div><div><b>${esc2(a.business)}</b></div>
         <div>${esc2(a.address)}</div><div>${esc2(a.cityStateZip)}</div>
@@ -2767,9 +2837,14 @@ function printAdvices(){
       td{padding:5px 8px;border-bottom:1px solid #eee}
       .mono{font-family:'Courier New',monospace}
       .noitems{padding:12px;color:#888;font-style:italic}
+      a{color:#1558b0;text-decoration:underline}
+      .advhead .trk a{color:#fff}
+      .dochead{display:flex;align-items:center;gap:14px;margin:0 0 14px}
+      .doclogo{height:46px;width:auto;display:block}
+      .dochead h1{margin:0}
       @media print{body{margin:8mm}}
     </style></head><body>
-    <h1>${esc2(state.name||'Project')}${state.jobCode?(' ('+esc2(state.jobCode)+')'):''} — Ship Advices</h1>
+    <div class="dochead">${logoImg()}<h1>${esc2(state.name||'Project')}${state.jobCode?(' ('+esc2(state.jobCode)+')'):''} — Ship Advices</h1></div>
     ${blocks}</body></html>`);
   w.document.close();
   setTimeout(()=>{ w.focus(); w.print(); }, 350);

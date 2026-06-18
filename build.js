@@ -60,6 +60,18 @@ function build() {
     () => "<script>\n" + appJs + "\n</script>"
   );
 
+  // 4) Logo — inline src/assets/focus-logo.png as a base64 data URI so the
+  //    printed/exported documents show it while the app stays fully offline.
+  const logoPath = path.join(SRC, "assets", "focus-logo.png");
+  let logoDataUri = "";
+  if (fs.existsSync(logoPath)) {
+    const b64 = fs.readFileSync(logoPath).toString("base64");
+    logoDataUri = "data:image/png;base64," + b64;
+  } else {
+    console.log("WARN: " + path.relative(ROOT, logoPath) + " not found — building without a logo.");
+  }
+  html = html.replace(/__LOGO_DATA_URI__/g, () => logoDataUri);
+
   if (!fs.existsSync(DIST)) fs.mkdirSync(DIST, { recursive: true });
   fs.writeFileSync(OUT, html, "utf8");
 

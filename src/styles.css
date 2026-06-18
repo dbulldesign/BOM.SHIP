@@ -116,6 +116,15 @@
   .ship-table td.calc{font-family:var(--mono);text-align:right;padding:6px 7px;white-space:nowrap;color:var(--sell);font-weight:600}
   .ship-table td.mirror{padding:6px 7px;color:var(--ink);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ship-table td.mirror.mono{font-family:var(--mono)}
+  /* Tracking-number quick link (auto-recognized carrier) */
+  .ship-table td.trk-cell{position:relative}
+  .ship-table td.trk-cell input{padding-right:18px}
+  .trk-link{position:absolute;right:3px;top:50%;transform:translateY(-50%);text-decoration:none;
+    font-size:.85rem;line-height:1;color:var(--amber-deep);cursor:pointer}
+  .trk-link:hover{color:var(--amber)}
+  .adv-trk{display:flex;align-items:center;gap:6px}
+  .adv-trk input{flex:1;min-width:0}
+  .adv-trk .trk-link{position:static;transform:none;white-space:nowrap;font-size:.78rem}
   .ship-table td.mirror.r{text-align:right;font-family:var(--mono)}
   .ship-table td.mirror .dim{color:#B5B2A6}
   .ship-live-note{font-size:.7rem;color:var(--ink-soft);font-style:italic;margin-left:4px}
@@ -442,6 +451,15 @@
   td.calc{font-family:var(--mono);text-align:right;padding:7px 8px;white-space:nowrap}
   td.calc.sell{color:var(--sell);font-weight:600;background:var(--sell-wash)}
   td input::placeholder{color:#B5B2A6}
+  /* Part-number field: contracts to its column, expands to reveal the full value on
+     hover/focus by overflowing neighbors to the right (cells are overflow:visible). */
+  td input.partno{transition:width .12s ease, box-shadow .12s ease}
+  td input.partno:hover,
+  td input.partno:focus{position:relative;z-index:6;width:300px;max-width:480px;min-width:130px;
+    field-sizing:content;background:var(--sheet);box-shadow:0 2px 10px rgba(20,24,32,.18);border-radius:2px}
+  td input.partno:focus{background:var(--amber-wash)}
+  body.dark td input.partno:hover,body.dark td input.partno:focus{background:var(--sheet)}
+  body.dark td input.partno:focus{background:#2A2310}
   .rowdel{border:none;background:none;color:#C0BCAE;font-size:1rem;padding:4px 8px;line-height:1}
   .rowdel:hover{color:var(--danger);background:none}
 
@@ -636,6 +654,8 @@
     .invbar,.viewswitch,.ship-import{display:none !important}
     .print-only{display:block !important}
     .print-banner{border-bottom:3px solid #20242C;padding:0 0 10px;margin-bottom:16px}
+    .print-banner .pb-head{display:flex;align-items:center;gap:14px}
+    .print-banner .doclogo{height:46px;width:auto;display:block}
     .print-banner .pb-co{font-size:1.4rem;font-weight:800;color:#20242C;letter-spacing:.01em}
     .print-banner .pb-proj{font-size:1.05rem;font-weight:700;margin-top:2px}
     .print-banner .pb-meta{font-size:.78rem;color:#555;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap}
