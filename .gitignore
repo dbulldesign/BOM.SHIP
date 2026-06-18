@@ -1,0 +1,11 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# dist/ is committed so the repo is runnable on clone.
+# Uncomment to rebuild locally instead:
+# dist/
