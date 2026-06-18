@@ -723,3 +723,45 @@
   .update-banner .upd-x{background:transparent;border:0;color:#bcd2f4;font-size:20px;
     line-height:1;cursor:pointer;padding:0 4px}
   .update-banner .upd-x:hover{color:#fff}
+
+  /* ===== Row actions (duplicate / save-to-library / delete) ===== */
+  td.row-actions{white-space:nowrap;text-align:right}
+  .rowact{border:none;background:none;color:#C0BCAE;font-size:.95rem;padding:4px 5px;line-height:1;cursor:pointer}
+  .rowact:hover{color:var(--amber-deep);background:none}
+  .rowact.star.saved{color:var(--amber-deep)}
+
+  /* ===== Floating "always visible" total (feature: sticky totals) ===== */
+  .mini-total{position:fixed;right:20px;bottom:20px;z-index:40;background:var(--ink);color:#fff;
+    border-radius:8px;box-shadow:0 6px 22px rgba(20,24,32,.34);padding:9px 16px;cursor:pointer;
+    display:flex;align-items:baseline;gap:12px;font-size:.78rem;border:1px solid rgba(255,255,255,.12)}
+  .mini-total:hover{box-shadow:0 8px 28px rgba(20,24,32,.46)}
+  .mini-total .mt-lbl{color:#E9B45C;letter-spacing:.1em;text-transform:uppercase;font-weight:700;font-size:.62rem}
+  .mini-total .mt-val{font-family:var(--mono);font-size:1.05rem;font-weight:600}
+  .mini-total .mt-margin{color:#9fb8c9;font-family:var(--mono);font-size:.72rem}
+  @media print{ .mini-total{display:none!important} }
+
+  /* ===== Generic dynamic modal (paste / library) ===== */
+  .modal-xwide{max-width:720px;width:94vw}
+  .modal-body{margin-bottom:18px}
+  .paste-area{width:100%;min-height:170px;font-family:var(--mono);font-size:.8rem;padding:8px 10px;
+    border:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);resize:vertical;line-height:1.5}
+  .paste-help{font-size:.78rem;color:var(--ink-soft);line-height:1.55;margin-bottom:10px}
+  .paste-help code{font-family:var(--mono);background:var(--amber-wash);padding:1px 5px;border-radius:3px;color:var(--amber-deep)}
+  .paste-opts{display:flex;align-items:center;gap:16px;margin:10px 0;font-size:.8rem;color:var(--ink-soft)}
+  .paste-opts label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  .modal-target{font-weight:700;color:var(--ink)}
+
+  /* ===== Parts library ===== */
+  .lib-search{width:100%;padding:8px 10px;border:1px solid var(--rule-dark);background:var(--sheet);
+    color:var(--ink);font-size:.84rem;margin-bottom:10px}
+  .lib-list{max-height:46vh;overflow-y:auto;border:1px solid var(--rule);border-radius:3px}
+  .lib-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--rule);font-size:.82rem}
+  .lib-item:last-child{border-bottom:none}
+  .lib-item:hover{background:var(--amber-wash)}
+  body.dark .lib-item:hover{background:#2A2310}
+  .lib-main{flex:1;min-width:0}
+  .lib-type{font-weight:700;color:var(--ink);margin-right:6px}
+  .lib-desc{color:var(--ink-soft)}
+  .lib-meta{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);white-space:nowrap}
+  .lib-empty{padding:22px;text-align:center;color:var(--ink-soft);font-size:.84rem}
+  .lib-item .ghost{font-size:.74rem;padding:4px 10px}
