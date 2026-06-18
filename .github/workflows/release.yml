@@ -8,9 +8,18 @@ name: Build & Release
 # Release. The in-app "Check for updates" reads that release automatically.
 
 on:
+  # Path 1: push a tag from your machine  ->  git tag v1.0.0 && git push origin v1.0.0
   push:
     tags:
       - "v*"
+  # Path 2: no terminal needed. On GitHub: Actions -> "Build & Release" ->
+  # "Run workflow" -> type the tag (e.g. v1.0.0). Creates the tag + release for you.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v1.0.0)"
+        required: true
+        default: "v1.0.0"
 
 permissions:
   contents: write
@@ -39,6 +48,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          # Use the typed tag for manual runs, or the pushed tag otherwise.
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           generate_release_notes: true
           files: |
             dist/lighting-bom-estimator.html

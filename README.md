@@ -92,9 +92,12 @@ on demand.
 
 1. Bump `APP_VERSION` in `src/js/app.js` (e.g. `"1.1.0"`).
 2. `node build.js`, then commit (keeps `dist/` in sync).
-3. Tag and push: `git tag v1.1.0 && git push origin v1.1.0`.
+3. Publish the release one of two ways:
+   - **From the browser (no terminal):** on GitHub go to **Actions → "Build &
+     Release" → Run workflow**, type the tag (e.g. `v1.1.0`), and run it.
+   - **From a terminal:** `git tag v1.1.0 && git push origin v1.1.0`.
 
-The **Build & Release** GitHub Action (`.github/workflows/release.yml`) then
+Either way the **Build & Release** GitHub Action (`.github/workflows/release.yml`)
 builds the offline file and attaches it (plus a zipped bundle with the launchers)
 to a GitHub Release. The in-app update check reads that release automatically, so
 existing users are notified next time they're online. Keep the tag (`v1.1.0`) and
