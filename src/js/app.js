@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.1.1";
+const APP_VERSION = "1.2.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -23,6 +23,13 @@ function verCmp(a,b){
 }
 async function checkForUpdates(manual){
   const badge=document.getElementById('verBadge');
+  /* The hosted (PWA) build updates itself via its service worker, so the
+     GitHub download banner only applies to the offline file:// build. */
+  if(location.protocol!=='file:'){
+    if(badge) badge.textContent="v"+APP_VERSION;
+    if(manual) toast("This installed app updates itself automatically.");
+    return;
+  }
   if(manual && badge) badge.textContent="Checking…";
   try{
     const res=await fetch(UPDATE_API,{headers:{Accept:"application/vnd.github+json"},cache:"no-store"});
@@ -62,8 +69,9 @@ function showUpdateBanner(ver,dlUrl,dlName){
 (function initVersionBadge(){
   const badge=document.getElementById('verBadge');
   if(badge) badge.textContent="v"+APP_VERSION;
-  // Quiet auto-check on launch, only when online; never blocks offline use.
-  if(navigator.onLine) setTimeout(()=>checkForUpdates(false),1500);
+  // Quiet auto-check on launch for the offline file build only (the hosted PWA
+  // self-updates). Never blocks offline use.
+  if(navigator.onLine && location.protocol==='file:') setTimeout(()=>checkForUpdates(false),1500);
 })();
 
 /* ================= Theme ================= */
