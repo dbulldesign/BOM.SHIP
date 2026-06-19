@@ -796,6 +796,20 @@
   body.dark .set-opt:hover{background:#2A2310}
   .set-opt input{margin-top:3px}
   .set-sub{color:var(--ink-soft);font-size:.78rem;font-weight:400}
+
+  /* ===== Phase 3b: column resize + row drag ===== */
+  .section thead th{position:relative}
+  .col-resizer{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:7;user-select:none}
+  .col-resizer:hover{background:var(--amber)}
+  td.row-actions{position:relative}
+  .drag-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 3px;vertical-align:middle;user-select:none}
+  .drag-grip:hover{color:var(--amber-deep)}
+  .drag-grip:active{cursor:grabbing}
+  tr.dragging{opacity:.45}
+  tr.drag-over > td{box-shadow:inset 0 2px 0 0 var(--amber)}
+  tr.section-row.drag-over > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
+  /* a text column the user has resized fills its fixed width instead of auto-growing */
+  td input.txt.fixedw{field-sizing:auto;width:100%;max-width:none}
 </style>
 </head>
 <body>
@@ -924,7 +938,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.7.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1475,6 +1489,21 @@ function toggleColMenu(){
   if(m) m.style.display = m.style.display==='block'?'none':'block';
 }
 
+/* ================= Column widths (drag-to-resize, persisted) ================= */
+const COLW_KEY = 'lbom_colw_v1';
+let colWidths = loadColWidths();
+function loadColWidths(){ try{ const v=JSON.parse(localStorage.getItem(COLW_KEY)); return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; } }
+function saveColWidths(){ try{ localStorage.setItem(COLW_KEY, JSON.stringify(colWidths)); }catch(e){} }
+const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:120,part:130,desc:200,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:130,notes:150,actions:74};
+const TEXT_COLS = new Set(['part','desc','source','notes']);
+function colKeyForField(field){
+  if(field==='part'||field==='accpart') return 'part';
+  if(field==='desc'||field==='accdesc') return 'desc';
+  if(field==='source'||field==='accsource') return 'source';
+  if(field==='note'||field==='accnote') return 'notes';
+  return null;
+}
+
 /* ================= UI state: collapse + settings ================= */
 const accExpanded = new Set();    // fixture row ids whose accessories are shown (default: hidden)
 const secCollapsed = new Set();   // section divider ids that are collapsed
@@ -1506,7 +1535,10 @@ function openSettings(){
    depending on the current setting. Used for the long free-text columns. */
 function txtField(value, da, field, ph, opt){
   opt = opt || {};
-  const cls = ('txt ' + (opt.cls||'')).trim();
+  /* A manually-resized text column gets a fixed width (no auto-fit growth). */
+  const ck = colKeyForField(field);
+  const fixed = ck && colWidths[ck]!=null;
+  const cls = ('txt ' + (opt.cls||'') + (fixed?' fixedw':'')).trim();
   const list  = opt.list  ? ` list="${opt.list}"`   : '';
   const style = opt.style ? ` style="${opt.style}"` : '';
   const title = opt.title ? ` title="${esc(opt.title)}"` : '';
@@ -1692,7 +1724,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const tagCell = allowAccessories
       ? `<td class="col-tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
       : '';
-    return `<tr>
+    return `<tr data-rk="${kind}" data-ri="${i}">
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
       <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
@@ -1708,6 +1740,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td class="col-source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
       <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
       <td style="width:74px" class="no-print row-actions">
+        <span class="drag-grip" draggable="true" title="Drag to move row">⠿</span>
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
         <button class="rowdel" tabindex="-1" title="Delete ${allowAccessories?'fixture':'control'}" onclick="delRow('${kind}',${i})">✕</button>
@@ -1757,7 +1790,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
   }
   function sectionRowHTML(r, i, secTot){
     const collapsed = secCollapsed.has(r.id);
-    return `<tr class="section-row"><td colspan="${NCOLS}"><div class="section-cell">
+    return `<tr class="section-row" data-rk="${kind}" data-sec="${i}"><td colspan="${NCOLS}"><div class="section-cell">
       <button class="sec-toggle no-print" title="${collapsed?'Expand':'Collapse'} section" onclick="toggleSection('${r.id}')">${collapsed?'▸':'▾'}</button>
       <span class="sx">SECTION</span>
       <input value="${esc(r.name)}" placeholder="Section name" data-k="${kind}" data-i="${i}" data-f="sectionname">
@@ -1828,6 +1861,14 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     <div class="sec-add-bar no-print">${addBtns}</div>
     <div class="table-scroll">
     <table>
+      <colgroup>${(allowAccessories
+        ? ['qty','type','tag','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
+        : ['qty','type','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
+      ).map(key=>{
+        const manual = colWidths[key];
+        const w = manual!=null ? manual : (TEXT_COLS.has(key) ? null : COL_DEFAULTS[key]);
+        return `<col data-col="${key}"${w!=null?` style="width:${w}px"`:''}>`;
+      }).join('')}</colgroup>
       <thead><tr>
         ${th('qty','Qty','r')}
         ${th('type','Type')}
@@ -2498,6 +2539,64 @@ function bindPane(){
   pane.querySelectorAll("[data-cosvcgname]").forEach(inp=>{
     inp.addEventListener("change", e=>{ const f=findCO(e.target.dataset.co); if(f){ f.co.services[+e.target.dataset.cosvcgname].name=e.target.value||'Services'; markDirty(); render(); } });
   });
+  bindTableInteractions(pane);
+}
+
+/* ===== Drag-to-resize columns + drag rows between/within sections ===== */
+let _dragSrc = null;   // {kind, i} of the row being dragged
+function bindTableInteractions(pane){
+  /* Column resize: a thin handle on each header cell's right edge. */
+  pane.querySelectorAll('.section thead th').forEach(th=>{
+    const grip = document.createElement('span');
+    grip.className = 'col-resizer no-print';
+    th.appendChild(grip);
+    grip.addEventListener('mousedown', e=>{
+      e.preventDefault(); e.stopPropagation();
+      const table = th.closest('table');
+      const cg = table.querySelector('colgroup');
+      const idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+      const colEl = cg && cg.children[idx];
+      if(!colEl) return;
+      const startX = e.clientX, startW = colEl.getBoundingClientRect().width;
+      const move = ev=>{ const w = Math.max(36, Math.round(startW + (ev.clientX - startX))); colEl.style.width = w+'px'; };
+      const up = ()=>{
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        const key = colEl.getAttribute('data-col');
+        if(key){ colWidths[key] = Math.round(colEl.getBoundingClientRect().width); saveColWidths(); }
+        render();   // re-render so a resized text column switches to its fixed width
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  });
+
+  /* Row drag-and-drop (grip = drag source; rows & section dividers = drop targets). */
+  pane.querySelectorAll('.drag-grip').forEach(grip=>{
+    grip.addEventListener('dragstart', e=>{
+      const tr = grip.closest('tr');
+      _dragSrc = { kind: tr.dataset.rk, i: +tr.dataset.ri };
+      try{ e.dataTransfer.setData('text/plain', String(_dragSrc.i)); e.dataTransfer.effectAllowed='move'; }catch(_){}
+      tr.classList.add('dragging');
+    });
+    grip.addEventListener('dragend', ()=>{ const tr=grip.closest('tr'); if(tr) tr.classList.remove('dragging'); _dragSrc=null; });
+  });
+  pane.querySelectorAll('tr[data-ri], tr[data-sec]').forEach(tr=>{
+    tr.addEventListener('dragover', e=>{
+      if(!_dragSrc || tr.dataset.rk!==_dragSrc.kind) return;
+      e.preventDefault(); tr.classList.add('drag-over');
+    });
+    tr.addEventListener('dragleave', ()=> tr.classList.remove('drag-over'));
+    tr.addEventListener('drop', e=>{
+      tr.classList.remove('drag-over');
+      if(!_dragSrc || tr.dataset.rk!==_dragSrc.kind) return;
+      e.preventDefault();
+      const from = _dragSrc.i;
+      const to = (tr.dataset.sec!==undefined) ? (+tr.dataset.sec + 1) : (+tr.dataset.ri);
+      _dragSrc = null;
+      moveRow(tr.dataset.rk, from, to);
+    });
+  });
 }
 
 /* ================= Row / option actions ================= */
@@ -2507,6 +2606,16 @@ function addRow(kind){ state.options[state.current][kind].push(blankRow()); mark
   if(rows.length) rows[rows.length-1].focus();
 }
 function delRow(kind,i){ state.options[state.current][kind].splice(i,1); markDirty(); render(); }
+/* Move a row from index `from` to index `to` within a kind's array (drag-and-drop). */
+function moveRow(kind, from, to){
+  const arr = state.options[state.current][kind];
+  if(from<0 || from>=arr.length || arr[from].isSection) return;
+  const [item] = arr.splice(from,1);
+  if(to>from) to--;                       // account for the removed element
+  to = Math.max(0, Math.min(arr.length, to));
+  arr.splice(to, 0, item);
+  markDirty(); render();
+}
 function addSection(kind){
   const arr = state.options[state.current][kind];
   const n = arr.filter(r=>r.isSection).length + 1;
