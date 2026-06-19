@@ -11,8 +11,9 @@ click **Install** (Edge/Chrome). It gets its own window and icon like a native
 app, works offline after the first visit, and **updates itself automatically**
 whenever a new version is published — no downloading or replacing files.
 
-- App URL: see the live link under the repo's **Settings → Pages** (it looks
-  like `https://dbulldesign.github.io/BOM.SHIP/`).
+- **App URL: https://dbulldesign.github.io/BOM.SHIP/** — open it, then click
+  **Install**. (If that link ever 404s, the authoritative URL is shown under the
+  repo's **Settings → Pages**.)
 
 **B) Offline file (pure local copy).** Download the single HTML and double-click
 it — no install, no internet. When a newer version exists it shows a Download
