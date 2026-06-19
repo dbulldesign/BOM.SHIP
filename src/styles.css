@@ -803,3 +803,22 @@
   tr.section-row.drag-over > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
   /* a text column the user has resized fills its fixed width instead of auto-growing */
   td input.txt.fixedw{field-sizing:auto;width:100%;max-width:none}
+
+  /* ===== Phase 4: linked fixtures + allowance/freight overrides ===== */
+  .linkbtn{border:none;background:none;color:#C0BCAE;font-size:.9rem;padding:4px 4px;line-height:1;cursor:pointer}
+  .linkbtn:hover{color:var(--amber-deep)}
+  .linkbtn.is-master{color:var(--amber-deep)}
+  .linkbtn.is-linked{color:#1763d6}
+  tr.link-master > td{box-shadow:inset 3px 0 0 0 var(--amber-deep)}
+  tr.link-linked > td{box-shadow:inset 3px 0 0 0 #7fb0ff}
+  tr.link-pickable > td{background:var(--amber-wash)}
+  body.dark tr.link-pickable > td{background:#241c0c}
+  td input.linked-cost{color:var(--ink-soft);background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(23,99,214,.06) 4px,rgba(23,99,214,.06) 8px);cursor:not-allowed}
+
+  /* allowance / freight override inputs */
+  .af-num{width:84px;font-family:var(--mono);font-size:.8rem;text-align:right;border:1px solid var(--rule-dark);
+    padding:2px 5px;background:var(--sheet);color:var(--ink);border-radius:2px}
+  .af-num.sell{color:var(--sell);font-weight:600}
+  .af-num.af-ov{border-color:var(--amber-deep);background:var(--amber-wash)}
+  body.dark .af-num.af-ov{background:#2A2310}
+  .af-cost,.af-sell{display:inline-flex;align-items:center;gap:5px}
