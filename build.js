@@ -133,9 +133,17 @@ function buildSite(html, appJs) {
     "}\n" +
     "</script>\n";
 
-  let siteHtml = html
-    .replace("</head>", headInject + "</head>")
-    .replace("</body>", swScript + "</body>");
+  // NOTE: the inlined SheetJS library contains the literal strings "</head>"
+  // and "</body></html>". The real document's </head> comes first (head is
+  // above the body), so replacing the first </head> is safe. But the first
+  // </body> in the file is the one *inside* the library string — so we must
+  // inject the service-worker script before the LAST </body>, or it lands in
+  // the middle of the library and breaks the page.
+  let siteHtml = html.replace("</head>", headInject + "</head>");
+  const bodyIdx = siteHtml.lastIndexOf("</body>");
+  siteHtml = bodyIdx >= 0
+    ? siteHtml.slice(0, bodyIdx) + swScript + siteHtml.slice(bodyIdx)
+    : siteHtml + swScript;
 
   if (!fs.existsSync(SITE)) fs.mkdirSync(SITE, { recursive: true });
   fs.writeFileSync(path.join(SITE, "index.html"), siteHtml, "utf8");
