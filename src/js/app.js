@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.3.1";
+const APP_VERSION = "1.4.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -138,7 +138,7 @@ let _idSeed = Date.now();
 function uid(){ return 'id' + (_idSeed++).toString(36); }
 
 function blankRow(){ return {id:uid(), qty:1, type:"", mfr:"", desc:"", part:"", unitCost:0, markup:null, note:"", source:"", tag:"", accessories:[], pieces:[]}; }
-const FIXTURE_TAGS = ["", "Downlight", "LED Linear", "Track Lighting"];
+const FIXTURE_TAGS = ["", "Downlight", "LED Linear", "Track Lighting", "Driver", "Power Supply", "Transformer"];
 function blankAccessory(preset){
   preset = preset || {};
   return {id:uid(), desc:preset.desc||"", part:preset.part||"", mfr:preset.mfr||"MISC.",
@@ -211,8 +211,8 @@ function blankChangeOrder(num, parent){
            fixtures:[blankRow()], controls:[], services:[] };
 }
 function blankProject(){
-  return { name:"", jobCode:"", client:"", preparedBy:"", company:"", date:new Date().toLocaleDateString(),
-           taxRate:8.75, taxLocation:"", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
+  return { name:"", jobCode:"", client:"", preparedBy:"", company:"Focus Lighting", date:new Date().toLocaleDateString(),
+           taxRate:8.875, taxLocation:"", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
            shipMeta:{}, invoices:[], shipAdvices:[], savedAddresses:[] };
 }
 let state = blankProject();
@@ -682,7 +682,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       : '';
     return `<tr>
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
-      <td style="width:78px"><input value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
+      <td style="width:78px"><input class="up" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
       <td style="width:120px"><input value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
       <td style="min-width:170px"><input value="${esc(r.desc)}" placeholder="Part description" ${da} data-f="desc"></td>
@@ -754,12 +754,24 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     return {cost, sell};
   }
 
+  const addBtnRow = (secIdx)=>`<tr class="sec-add-row no-print"><td colspan="${NCOLS}">
+      <button class="acc-add-btn" onclick="addRowToSection('${kind}',${secIdx})">+ Add ${allowAccessories?'fixture':'control'} to this section</button>
+    </td></tr>`;
   let body;
   if(hasSections){
-    body = rows.map((r,i)=>{
-      if(r.isSection) return sectionRowHTML(r, i, sectionSubtotalAt(i));
-      return fixtureRowHTML(r,i) + accessoryRowsHTML(r,i);
-    }).join("");
+    const parts = [];
+    let curSec = null;
+    rows.forEach((r,i)=>{
+      if(r.isSection){
+        if(curSec!==null) parts.push(addBtnRow(curSec));   // close out the previous section
+        curSec = i;
+        parts.push(sectionRowHTML(r, i, sectionSubtotalAt(i)));
+      } else {
+        parts.push(fixtureRowHTML(r,i) + accessoryRowsHTML(r,i));
+      }
+    });
+    if(curSec!==null) parts.push(addBtnRow(curSec));        // close the last section
+    body = parts.join("");
   } else {
     const sorted = sortedRows(rows, kind);
     body = sorted.map(({r,i})=> fixtureRowHTML(r,i) + accessoryRowsHTML(r,i)).join("");
@@ -1026,7 +1038,7 @@ function coSectionTable(co, kind, label){
     const da = `data-co="${co.id}" data-cok="${kind}" data-coi="${i}"`;
     return `<tr>
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-cof="qty"></td>
-      <td style="width:78px"><input value="${esc(r.type)}" placeholder="F1" ${da} data-cof="type"></td>
+      <td style="width:78px"><input class="up" value="${esc(r.type)}" placeholder="F1" ${da} data-cof="type"></td>
       <td style="width:120px"><input value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-cof="mfr"></td>
       <td style="min-width:160px"><input value="${esc(r.desc)}" placeholder="Description" ${da} data-cof="desc"></td>
       <td style="width:120px"><input class="partno" value="${esc(r.part)}" placeholder="Part #" title="${esc(r.part)}" style="font-family:var(--mono)" ${da} data-cof="part"></td>
@@ -1347,6 +1359,7 @@ function bindPane(){
       else if(f==="markup")   row.markup = parseMarkup(val);
       else if(f==="note")     row.note = val;
       else if(f==="source")   row.source = val;
+      else if(f==="type")     row.type = val.toUpperCase();
       else row[f] = val;
       markDirty(); render();
     });
@@ -1427,6 +1440,7 @@ function bindPane(){
       if(field==='qty') row.qty=Math.max(0,numOr(val,0));
       else if(field==='unitCost') row.unitCost=numOr(val,0);
       else if(field==='markup') row.markup=parseMarkup(val);
+      else if(field==='type') row.type=val.toUpperCase();
       else row[field]=val;
       markDirty(); render();
     });
@@ -1455,9 +1469,21 @@ function addRow(kind){ state.options[state.current][kind].push(blankRow()); mark
 }
 function delRow(kind,i){ state.options[state.current][kind].splice(i,1); markDirty(); render(); }
 function addSection(kind){
-  const n = state.options[state.current][kind].filter(r=>r.isSection).length + 1;
-  state.options[state.current][kind].push(sectionRow("Section "+n));
+  const arr = state.options[state.current][kind];
+  const n = arr.filter(r=>r.isSection).length + 1;
+  arr.push(sectionRow("Section "+n));
+  arr.push(blankRow());           // new section starts with one empty fixture line
   markDirty(); render();
+}
+/* Insert a new fixture as the LAST row of the section whose divider is at secIdx. */
+function addRowToSection(kind, secIdx){
+  const arr = state.options[state.current][kind];
+  let end = arr.length;
+  for(let j=secIdx+1; j<arr.length; j++){ if(arr[j].isSection){ end = j; break; } }
+  arr.splice(end, 0, blankRow());
+  markDirty(); render();
+  const el = document.querySelector(`#pane input[data-k="${kind}"][data-i="${end}"][data-f="qty"]`);
+  if(el) el.focus();
 }
 function addAccessory(kind, i, presetIdx){
   const row = state.options[state.current][kind][i];

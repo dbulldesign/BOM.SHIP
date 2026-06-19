@@ -465,6 +465,8 @@
   td.calc{font-family:var(--mono);text-align:right;padding:7px 8px;white-space:nowrap}
   td.calc.sell{color:var(--sell);font-weight:600;background:var(--sell-wash)}
   td input::placeholder{color:#B5B2A6}
+  input.up{text-transform:uppercase}
+  tr.sec-add-row td{background:transparent!important;border-bottom:1px solid var(--rule)}
   /* Part-number field: contracts to its column, expands to reveal the full value on
      hover/focus by overflowing neighbors to the right (cells are overflow:visible). */
   td input.partno{transition:width .12s ease, box-shadow .12s ease}
@@ -559,7 +561,10 @@
   .stamp-row .lbl{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
   .stamp-row .val{font-family:var(--mono);font-size:.95rem}
   .stamp-row.muted .val{color:var(--ink-soft);font-size:.85rem}
-  .stamp-row.tax .lbl{display:flex;align-items:center;gap:6px}
+  .stamp-row.tax{background:var(--ink)}
+  .stamp-row.tax .lbl{display:flex;align-items:center;gap:6px;color:#fff}
+  .stamp-row.tax .val{color:#fff}
+  .stamp-row.tax input{background:#2E3240;color:#fff;border-color:#3A3F4C}
   .stamp-row.grand{background:var(--ink);color:#fff;padding:12px 14px}
   .stamp-row.grand .lbl{color:#E9B45C;font-weight:700}
   .stamp-row.grand .val{font-size:1.3rem;font-weight:600;color:#fff}
