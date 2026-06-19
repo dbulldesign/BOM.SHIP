@@ -737,16 +737,6 @@
   .rowact:hover{color:var(--amber-deep);background:none}
   .rowact.star.saved{color:var(--amber-deep)}
 
-  /* ===== Floating "always visible" total (feature: sticky totals) ===== */
-  .mini-total{position:fixed;right:20px;bottom:20px;z-index:40;background:var(--ink);color:#fff;
-    border-radius:8px;box-shadow:0 6px 22px rgba(20,24,32,.34);padding:9px 16px;cursor:pointer;
-    display:flex;align-items:baseline;gap:12px;font-size:.78rem;border:1px solid rgba(255,255,255,.12)}
-  .mini-total:hover{box-shadow:0 8px 28px rgba(20,24,32,.46)}
-  .mini-total .mt-lbl{color:#E9B45C;letter-spacing:.1em;text-transform:uppercase;font-weight:700;font-size:.62rem}
-  .mini-total .mt-val{font-family:var(--mono);font-size:1.05rem;font-weight:600}
-  .mini-total .mt-margin{color:#9fb8c9;font-family:var(--mono);font-size:.72rem}
-  @media print{ .mini-total{display:none!important} }
-
   /* ===== Generic dynamic modal (paste / library) ===== */
   .modal-xwide{max-width:720px;width:94vw}
   .modal-body{margin-bottom:18px}
@@ -863,7 +853,6 @@
 <div id="adviceView" style="display:none"></div>
 
 <div class="toast" id="toast"></div>
-<div id="miniTotal" class="mini-total no-print" style="display:none" onclick="scrollToTotals()" title="Jump to totals"></div>
 
 <script>
 /* === Embedded SheetJS (xlsx) mini build for offline Excel export === */
@@ -892,7 +881,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1472,8 +1461,8 @@ function render(){
   document.title = (state.name? state.name+" — ":"") + "Lighting BOM Estimator";
   renderRecents();
 
-  if(view === 'shipping'){ renderShipping(); updateMiniTotal(); return; }
-  if(view === 'advice'){ renderAdvice(); updateMiniTotal(); return; }
+  if(view === 'shipping'){ renderShipping(); return; }
+  if(view === 'advice'){ renderAdvice(); return; }
 
   /* tabs */
   const tabs = document.getElementById("tabs");
@@ -1836,7 +1825,6 @@ function renderPane(){
     </div>
     ${opt.approved ? changeOrdersSection(opt) : ''}`;
   bindPane();
-  updateMiniTotal();
 }
 
 /* Change Orders area — shown once an option is approved. Each CO is its own mini-BOM. */
@@ -2551,21 +2539,6 @@ function openLibrary(kind){
     }
   });
 }
-
-/* ================= Floating "always visible" total ================= */
-function updateMiniTotal(){
-  const el = document.getElementById('miniTotal');
-  if(!el) return;
-  const opt = state.options[state.current];
-  if(view!=='estimate' || !opt){ el.style.display='none'; return; }
-  const t = optionTotals(opt);
-  const margin = t.sub>0 ? ((t.sub-t.cost)/t.sub*100) : 0;
-  el.innerHTML = `<span class="mt-lbl">${esc(opt.name)}</span>`+
-                 `<span class="mt-val">${money(t.grand)}</span>`+
-                 `<span class="mt-margin">${margin.toFixed(1)}% margin</span>`;
-  el.style.display = 'flex';
-}
-function scrollToTotals(){ const s=document.querySelector('#pane .stamp'); if(s) s.scrollIntoView({behavior:'smooth', block:'center'}); }
 
 function addOption(){ state.options.push(blankOption("Option "+(state.options.length+1))); state.current=state.options.length-1; markDirty(); render(); }
 /* Switching the active option is not itself an undoable edit. Flush any pending

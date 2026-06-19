@@ -730,16 +730,6 @@
   .rowact:hover{color:var(--amber-deep);background:none}
   .rowact.star.saved{color:var(--amber-deep)}
 
-  /* ===== Floating "always visible" total (feature: sticky totals) ===== */
-  .mini-total{position:fixed;right:20px;bottom:20px;z-index:40;background:var(--ink);color:#fff;
-    border-radius:8px;box-shadow:0 6px 22px rgba(20,24,32,.34);padding:9px 16px;cursor:pointer;
-    display:flex;align-items:baseline;gap:12px;font-size:.78rem;border:1px solid rgba(255,255,255,.12)}
-  .mini-total:hover{box-shadow:0 8px 28px rgba(20,24,32,.46)}
-  .mini-total .mt-lbl{color:#E9B45C;letter-spacing:.1em;text-transform:uppercase;font-weight:700;font-size:.62rem}
-  .mini-total .mt-val{font-family:var(--mono);font-size:1.05rem;font-weight:600}
-  .mini-total .mt-margin{color:#9fb8c9;font-family:var(--mono);font-size:.72rem}
-  @media print{ .mini-total{display:none!important} }
-
   /* ===== Generic dynamic modal (paste / library) ===== */
   .modal-xwide{max-width:720px;width:94vw}
   .modal-body{margin-bottom:18px}
