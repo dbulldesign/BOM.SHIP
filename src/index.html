@@ -27,7 +27,7 @@
   <div class="tb-cell"><span class="tb-label">Project</span>
     <input id="projName" placeholder="Project name" oninput="state.name=this.value;markDirty()"></div>
   <div class="tb-cell"><span class="tb-label">Job Code</span>
-    <input id="projJobCode" placeholder="Job code" oninput="state.jobCode=this.value;markDirty()"></div>
+    <input id="projJobCode" class="up" placeholder="Job code" oninput="this.value=this.value.toUpperCase();state.jobCode=this.value;markDirty()"></div>
   <div class="tb-cell"><span class="tb-label">Client / GC</span>
     <input id="projClient" placeholder="Client" oninput="state.client=this.value;markDirty()"></div>
   <div class="tb-cell"><span class="tb-label">Prepared by</span>
