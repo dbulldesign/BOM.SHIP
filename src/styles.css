@@ -789,3 +789,17 @@
   body.dark .set-opt:hover{background:#2A2310}
   .set-opt input{margin-top:3px}
   .set-sub{color:var(--ink-soft);font-size:.78rem;font-weight:400}
+
+  /* ===== Phase 3b: column resize + row drag ===== */
+  .section thead th{position:relative}
+  .col-resizer{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:7;user-select:none}
+  .col-resizer:hover{background:var(--amber)}
+  td.row-actions{position:relative}
+  .drag-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 3px;vertical-align:middle;user-select:none}
+  .drag-grip:hover{color:var(--amber-deep)}
+  .drag-grip:active{cursor:grabbing}
+  tr.dragging{opacity:.45}
+  tr.drag-over > td{box-shadow:inset 0 2px 0 0 var(--amber)}
+  tr.section-row.drag-over > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
+  /* a text column the user has resized fills its fixed width instead of auto-growing */
+  td input.txt.fixedw{field-sizing:auto;width:100%;max-width:none}
