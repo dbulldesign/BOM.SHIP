@@ -1,6 +1,9 @@
 # Lighting BOM Estimator
 
-A single, fully-offline HTML app for estimating lighting jobs, tracking procurement/shipping, and issuing ship advices. The app runs by **double-clicking the built HTML file** in Edge or Chrome on Windows — no server, no internet, no install.
+A fast, fully-offline web app for lighting estimating — build multi-option bids
+(fixtures, controls, services, accessories), track procurement & shipping, and
+issue ship advices. Run it as an **installable app** or a **single double-click
+HTML file**. No server, no accounts, no internet required.
 
 ## Get the app (for users)
 

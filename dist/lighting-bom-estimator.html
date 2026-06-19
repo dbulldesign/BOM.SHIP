@@ -467,6 +467,16 @@
   td input.partno:focus{background:var(--amber-wash)}
   body.dark td input.partno:hover,body.dark td input.partno:focus{background:var(--sheet)}
   body.dark td input.partno:focus{background:#2A2310}
+  /* Notes & Price Source: same expand-on-hover/focus reveal as Part No. */
+  td.col-notes input, td.col-source input{transition:width .12s ease, box-shadow .12s ease}
+  td.col-notes input:hover, td.col-notes input:focus,
+  td.col-source input:hover, td.col-source input:focus{position:relative;z-index:6;width:280px;
+    max-width:420px;min-width:130px;field-sizing:content;background:var(--sheet);
+    box-shadow:0 2px 10px rgba(20,24,32,.18);border-radius:2px}
+  td.col-notes input:focus, td.col-source input:focus{background:var(--amber-wash)}
+  body.dark td.col-notes input:hover,body.dark td.col-source input:hover,
+  body.dark td.col-notes input:focus,body.dark td.col-source input:focus{background:var(--sheet)}
+  body.dark td.col-notes input:focus,body.dark td.col-source input:focus{background:#2A2310}
   .rowdel{border:none;background:none;color:#C0BCAE;font-size:1rem;padding:4px 8px;line-height:1}
   .rowdel:hover{color:var(--danger);background:none}
 
@@ -881,7 +891,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
