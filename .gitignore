@@ -9,3 +9,6 @@ Thumbs.db
 # dist/ is committed so the repo is runnable on clone.
 # Uncomment to rebuild locally instead:
 # dist/
+
+# site/ is the generated hosted-PWA build; CI rebuilds and deploys it to Pages.
+site/

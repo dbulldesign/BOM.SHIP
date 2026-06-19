@@ -94,6 +94,56 @@ function build() {
       console.log("Copied launcher " + name);
     }
   }
+
+  // 6) Build the hosted PWA into site/ — same app, plus a manifest + service
+  //    worker so it installs like a native app and auto-updates on each release.
+  //    (The dist/ file stays a pure file:// app with no service worker.)
+  buildSite(html, appJs);
+}
+
+const SITE = path.join(ROOT, "site");
+function buildSite(html, appJs) {
+  const webSrc = path.join(SRC, "web");
+  if (!fs.existsSync(webSrc)) return;
+
+  const verMatch = appJs.match(/APP_VERSION\s*=\s*"([0-9.]+)"/);
+  const APP_VERSION = verMatch ? verMatch[1] : "0.0.0";
+
+  const headInject =
+    '<link rel="manifest" href="manifest.webmanifest">\n' +
+    '<meta name="theme-color" content="#14181f">\n' +
+    '<link rel="icon" href="icon.svg">\n';
+
+  // Registers the service worker and reloads once when a new version activates.
+  const swScript =
+    "<script>\n" +
+    "if('serviceWorker' in navigator){\n" +
+    "  window.addEventListener('load', function(){\n" +
+    "    navigator.serviceWorker.register('sw.js').then(function(reg){\n" +
+    "      reg.addEventListener('updatefound', function(){\n" +
+    "        var nw = reg.installing; if(!nw) return;\n" +
+    "        nw.addEventListener('statechange', function(){\n" +
+    "          if(nw.state==='installed' && navigator.serviceWorker.controller){ nw.postMessage('skipWaiting'); }\n" +
+    "        });\n" +
+    "      });\n" +
+    "    }).catch(function(){});\n" +
+    "    var refreshing=false;\n" +
+    "    navigator.serviceWorker.addEventListener('controllerchange', function(){ if(refreshing) return; refreshing=true; location.reload(); });\n" +
+    "  });\n" +
+    "}\n" +
+    "</script>\n";
+
+  let siteHtml = html
+    .replace("</head>", headInject + "</head>")
+    .replace("</body>", swScript + "</body>");
+
+  if (!fs.existsSync(SITE)) fs.mkdirSync(SITE, { recursive: true });
+  fs.writeFileSync(path.join(SITE, "index.html"), siteHtml, "utf8");
+  fs.copyFileSync(path.join(webSrc, "manifest.webmanifest"), path.join(SITE, "manifest.webmanifest"));
+  fs.copyFileSync(path.join(webSrc, "icon.svg"), path.join(SITE, "icon.svg"));
+  const sw = fs.readFileSync(path.join(webSrc, "sw.js"), "utf8").replace(/__APP_VERSION__/g, APP_VERSION);
+  fs.writeFileSync(path.join(SITE, "sw.js"), sw, "utf8");
+  console.log("Built site/ (PWA, v" + APP_VERSION + ")");
 }
 
 build();
