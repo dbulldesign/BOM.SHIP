@@ -810,6 +810,25 @@
   tr.section-row.drag-over > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
   /* a text column the user has resized fills its fixed width instead of auto-growing */
   td input.txt.fixedw{field-sizing:auto;width:100%;max-width:none}
+
+  /* ===== Phase 4: linked fixtures + allowance/freight overrides ===== */
+  .linkbtn{border:none;background:none;color:#C0BCAE;font-size:.9rem;padding:4px 4px;line-height:1;cursor:pointer}
+  .linkbtn:hover{color:var(--amber-deep)}
+  .linkbtn.is-master{color:var(--amber-deep)}
+  .linkbtn.is-linked{color:#1763d6}
+  tr.link-master > td{box-shadow:inset 3px 0 0 0 var(--amber-deep)}
+  tr.link-linked > td{box-shadow:inset 3px 0 0 0 #7fb0ff}
+  tr.link-pickable > td{background:var(--amber-wash)}
+  body.dark tr.link-pickable > td{background:#241c0c}
+  td input.linked-cost{color:var(--ink-soft);background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(23,99,214,.06) 4px,rgba(23,99,214,.06) 8px);cursor:not-allowed}
+
+  /* allowance / freight override inputs */
+  .af-num{width:84px;font-family:var(--mono);font-size:.8rem;text-align:right;border:1px solid var(--rule-dark);
+    padding:2px 5px;background:var(--sheet);color:var(--ink);border-radius:2px}
+  .af-num.sell{color:var(--sell);font-weight:600}
+  .af-num.af-ov{border-color:var(--amber-deep);background:var(--amber-wash)}
+  body.dark .af-num.af-ov{background:#2A2310}
+  .af-cost,.af-sell{display:inline-flex;align-items:center;gap:5px}
 </style>
 </head>
 <body>
@@ -938,7 +957,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.8.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1386,6 +1405,9 @@ function servicesTotals(groups, defMarkup){
 }
 /* Allowance & Freight: a % of subtotal COST (per BOM template), sell = cost * markup rounded up.
    Fixtures allowance/freight use fixtures cost & markup; controls allowance uses controls cost & markup. */
+/* null-or-number helper for optional override fields */
+function numOrNull(x){ return (x===null||x===undefined||x==='') ? null : numOr(x,0); }
+function ovr(val, computed){ return (val===null||val===undefined||val==='') ? computed : numOr(val,0); }
 function allowanceFreight(opt){
   const f = sectionTotals(opt.fixtures, opt.fixtureMarkup);
   const c = sectionTotals(opt.controls, opt.controlMarkup);
@@ -1394,10 +1416,15 @@ function allowanceFreight(opt){
   const aCost = f.cost * (numOr(opt.allowancePct,0)/100);
   const frCost = f.cost * (numOr(opt.freightPct,0)/100);
   const caCost = c.cost * (numOr(opt.controlAllowancePct,0)/100);
+  /* Manual overrides: a typed cost/sell wins over the %-of-section formula.
+     If only the cost is overridden, the sell follows from the overridden cost. */
+  const allowCost = ovr(opt.allowCostOv, aCost);
+  const freightCost = ovr(opt.freightCostOv, frCost);
+  const ctrlAllowCost = ovr(opt.ctrlAllowCostOv, caCost);
   return {
-    allowCost:aCost, allowSell:Math.ceil(aCost*fMk),
-    freightCost:frCost, freightSell:Math.ceil(frCost*fMk),
-    ctrlAllowCost:caCost, ctrlAllowSell:Math.ceil(caCost*cMk)
+    allowCost, allowSell: ovr(opt.allowSellOv, Math.ceil(allowCost*fMk)),
+    freightCost, freightSell: ovr(opt.freightSellOv, Math.ceil(freightCost*fMk)),
+    ctrlAllowCost, ctrlAllowSell: ovr(opt.ctrlAllowSellOv, Math.ceil(ctrlAllowCost*cMk))
   };
 }
 /* Core BOM totals for any option-shaped object (option OR change order). */
@@ -1494,7 +1521,7 @@ const COLW_KEY = 'lbom_colw_v1';
 let colWidths = loadColWidths();
 function loadColWidths(){ try{ const v=JSON.parse(localStorage.getItem(COLW_KEY)); return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; } }
 function saveColWidths(){ try{ localStorage.setItem(COLW_KEY, JSON.stringify(colWidths)); }catch(e){} }
-const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:120,part:130,desc:200,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:130,notes:150,actions:74};
+const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:120,part:130,desc:200,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:130,notes:150,actions:92};
 const TEXT_COLS = new Set(['part','desc','source','notes']);
 function colKeyForField(field){
   if(field==='part'||field==='accpart') return 'part';
@@ -1724,14 +1751,23 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const tagCell = allowAccessories
       ? `<td class="col-tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
       : '';
-    return `<tr data-rk="${kind}" data-ri="${i}">
+    const linkCls = r.linkId ? (r.linkMaster ? ' link-master' : ' link-linked') : '';
+    const picking = (_linkPick && allowAccessories && r.linkId!==_linkPick) ? ' link-pickable' : '';
+    const isLinkedFollower = r.linkId && !r.linkMaster;
+    const costCell = isLinkedFollower
+      ? `<td style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
+      : `<td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>`;
+    const linkBtn = allowAccessories
+      ? `<button class="rowact linkbtn${r.linkId?(r.linkMaster?' is-master':' is-linked'):''}" tabindex="-1" title="${_linkPick?(r.linkId===_linkPick?(r.linkMaster?'Finish linking':'Unlink this fixture'):'Link this fixture to the master (shared cost)'):(r.linkId?'Unlink':'Link unit cost with other fixtures')}" onclick="linkAction('${kind}',${i})">${r.linkId?(r.linkMaster?'★':'🔗'):'🔗'}</button>`
+      : '';
+    return `<tr data-rk="${kind}" data-ri="${i}" class="${linkCls}${picking}">
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
       <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
       <td style="width:120px"><input list="memMfr" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
       <td style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
       <td style="min-width:170px" class="col-desc">${txtField(r.desc, da, 'desc', 'Part description', {list:'memDesc'})}</td>
-      <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>
+      ${costCell}
       <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(r)}" placeholder="1" title="Manufacturer multiplier (scales unit cost)" ${da} data-f="mfrMult"></td>
       ${mkCell(r.markup, da, 'col-markup')}
       <td class="calc" style="width:88px">${money(c.unitSell)}</td>
@@ -1739,8 +1775,9 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
       <td class="col-source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
       <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
-      <td style="width:74px" class="no-print row-actions">
+      <td style="width:92px" class="no-print row-actions">
         <span class="drag-grip" draggable="true" title="Drag to move row">⠿</span>
+        ${linkBtn}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
         <button class="rowdel" tabindex="-1" title="Delete ${allowAccessories?'fixture':'control'}" onclick="delRow('${kind}',${i})">✕</button>
@@ -1903,23 +1940,25 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
 function allowanceFreightRows(kind){
   const opt = state.options[state.current];
   const af = allowanceFreight(opt);
-  function line(label, pctField, pctVal, cost, sell){
+  /* cost/sell are editable: typing sets an override; clearing reverts to the % formula. */
+  function line(label, pctField, pctVal, cost, sell, costOvField, sellOvField){
+    const costOv = opt[costOvField], sellOv = opt[sellOvField];
     return `<div class="af-line">
       <span class="af-label">${label}</span>
       <span class="af-pctwrap no-print"><input class="af-pct num" inputmode="decimal" value="${numOr(pctVal,0)}" data-fapct="${pctField}" title="% of section cost"> %</span>
-      <span class="af-cost">Cost ${money(cost)}</span>
-      <span class="af-sell">Sell <b>${money(sell)}</b></span>
+      <span class="af-cost">Cost <input class="af-num num${numOrNull(costOv)!=null?' af-ov':''}" inputmode="decimal" value="${cost2(cost)}" data-afov="${costOvField}" title="Type to override; clear to use the %"></span>
+      <span class="af-sell">Sell <input class="af-num num sell${numOrNull(sellOv)!=null?' af-ov':''}" inputmode="decimal" value="${cost2(sell)}" data-afov="${sellOvField}" title="Type to override; clear to use the %"></span>
     </div>`;
   }
   if(kind==='fixtures'){
     return `<div class="af-block">
-      ${line('Allowance (Fixtures)','allowancePct',opt.allowancePct,af.allowCost,af.allowSell)}
-      ${line('Freight (Fixtures)','freightPct',opt.freightPct,af.freightCost,af.freightSell)}
+      ${line('Allowance (Fixtures)','allowancePct',opt.allowancePct,af.allowCost,af.allowSell,'allowCostOv','allowSellOv')}
+      ${line('Freight (Fixtures)','freightPct',opt.freightPct,af.freightCost,af.freightSell,'freightCostOv','freightSellOv')}
     </div>`;
   }
   if(kind==='controls'){
     return `<div class="af-block">
-      ${line('Allowance (Controls)','controlAllowancePct',opt.controlAllowancePct,af.ctrlAllowCost,af.ctrlAllowSell)}
+      ${line('Allowance (Controls)','controlAllowancePct',opt.controlAllowancePct,af.ctrlAllowCost,af.ctrlAllowSell,'ctrlAllowCostOv','ctrlAllowSellOv')}
     </div>`;
   }
   return '';
@@ -2430,7 +2469,8 @@ function bindPane(){
       }
       /* normal fixture/control row */
       if(f==="qty")     row.qty = Math.max(0, numOr(val,0));
-      else if(f==="unitCost") row.unitCost = numOr(val,0);
+      else if(f==="unitCost"){ row.unitCost = numOr(val,0);
+        if(row.linkId && row.linkMaster) linkMembers(row.linkId).forEach(x=>{ x.r.unitCost = row.unitCost; }); }
       else if(f==="mfrMult")  row.mfrMult = numOr(val,1);
       else if(f==="markup")   row.markup = parseMarkup(val);
       else if(f==="note")     row.note = val;
@@ -2499,6 +2539,14 @@ function bindPane(){
   pane.querySelectorAll("input[data-fapct]").forEach(inp=>{
     inp.addEventListener("change", e=>{
       state.options[state.current][e.target.dataset.fapct] = Math.max(0, numOr(e.target.value,0));
+      markDirty(); render();
+    });
+  });
+  /* Allowance / Freight manual overrides (cost or sell). Blank = use the % formula. */
+  pane.querySelectorAll("input[data-afov]").forEach(inp=>{
+    inp.addEventListener("change", e=>{
+      const v = e.target.value.trim();
+      state.options[state.current][e.target.dataset.afov] = (v===''? null : Math.max(0, numOr(v,0)));
       markDirty(); render();
     });
   });
@@ -2674,10 +2722,67 @@ function dupRow(kind, i){
   if(!src || src.isSection) return;
   const copy = JSON.parse(JSON.stringify(src));
   copy.id = uid();
+  delete copy.linkId; delete copy.linkMaster;   // a duplicate isn't auto-linked
   if(copy.accessories) copy.accessories.forEach(a=>a.id=uid());
   if(copy.pieces) copy.pieces.forEach(pc=>pc.id=uid());
   arr.splice(i+1, 0, copy);
   markDirty(); render();
+}
+
+/* ================= Linked fixtures (shared unit cost) =================
+   A link group shares one unit cost. The "master" owns the editable cost;
+   linked rows mirror it (their cost field is read-only). Linking is manual. */
+let _linkPick = null;             // linkId currently being assembled, or null
+function fixturesArr(){ return state.options[state.current].fixtures; }
+function linkMembers(linkId){ return fixturesArr().map((r,idx)=>({r,idx})).filter(x=>!x.r.isSection && x.r.linkId===linkId); }
+function masterOf(linkId){ const m=linkMembers(linkId).find(x=>x.r.linkMaster); return m?m.r:null; }
+function linkAction(kind, i){
+  if(kind!=='fixtures'){ toast('Linking is available for fixtures'); return; }
+  const arr = fixturesArr(); const row = arr[i];
+  if(!row || row.isSection) return;
+  if(_linkPick){
+    const master = masterOf(_linkPick);
+    if(!master){ _linkPick=null; render(); return; }
+    if(row.linkId===_linkPick){
+      if(row.linkMaster){ finishLink(); return; }   // clicking the master finishes
+      unlinkRow(i); return;                          // clicking a member unlinks it
+    }
+    row.linkId = _linkPick; row.linkMaster = false; row.unitCost = master.unitCost;
+    markDirty(); render(); toast('Linked '+(row.type||'fixture')+' — shares '+(master.type||'master')+' cost');
+    return;
+  }
+  if(row.linkId){ unlinkRow(i); return; }
+  row.linkId = 'lnk'+(_idSeed++).toString(36); row.linkMaster = true; _linkPick = row.linkId;
+  markDirty(); render();
+  toast('Cost master set. Click 🔗 on fixtures to share this cost; click 🔗 on the master again to finish.');
+}
+function finishLink(){
+  const id = _linkPick; _linkPick = null;
+  if(id){ const mem = linkMembers(id); if(mem.length<2) mem.forEach(x=>{ delete x.r.linkId; delete x.r.linkMaster; }); }
+  markDirty(); render(); toast('Done linking');
+}
+function unlinkRow(i){
+  const arr = fixturesArr(); const row = arr[i]; const id = row.linkId; const wasMaster = !!row.linkMaster;
+  delete row.linkId; delete row.linkMaster;
+  const mem = linkMembers(id);
+  if(wasMaster && mem.length) mem[0].r.linkMaster = true;            // promote a remaining member
+  if(mem.length<2) mem.forEach(x=>{ delete x.r.linkId; delete x.r.linkMaster; });  // dissolve singletons
+  if(_linkPick===id && (!mem.length)) _linkPick=null;
+  markDirty(); render(); toast('Unlinked');
+}
+/* Fix up link groups after load: ensure each group has exactly one master and ≥2 members. */
+function sanitizeLinks(opt){
+  const groups = {};
+  (opt.fixtures||[]).forEach(r=>{ if(r && !r.isSection && r.linkId){ (groups[r.linkId]=groups[r.linkId]||[]).push(r); } });
+  Object.keys(groups).forEach(id=>{
+    const mem = groups[id];
+    if(mem.length<2){ mem.forEach(r=>{ delete r.linkId; delete r.linkMaster; }); return; }
+    const masters = mem.filter(r=>r.linkMaster);
+    if(masters.length===0) mem[0].linkMaster = true;
+    else if(masters.length>1){ masters.forEach((r,k)=>{ if(k>0) r.linkMaster=false; }); }
+    const master = mem.find(r=>r.linkMaster);
+    mem.forEach(r=>{ if(!r.linkMaster) r.unitCost = master.unitCost; });   // resync shared cost
+  });
 }
 
 /* Guard inserts/edits into an approved+locked base. Returns true if allowed,
@@ -4134,6 +4239,9 @@ function applyProject(d){
       allowancePct: typeof o.allowancePct==="number"? o.allowancePct:1,
       freightPct: typeof o.freightPct==="number"? o.freightPct:5,
       controlAllowancePct: typeof o.controlAllowancePct==="number"? o.controlAllowancePct:1,
+      allowCostOv:numOrNull(o.allowCostOv), allowSellOv:numOrNull(o.allowSellOv),
+      freightCostOv:numOrNull(o.freightCostOv), freightSellOv:numOrNull(o.freightSellOv),
+      ctrlAllowCostOv:numOrNull(o.ctrlAllowCostOv), ctrlAllowSellOv:numOrNull(o.ctrlAllowSellOv),
       approved: !!o.approved,
       baseLocked: o.baseLocked!==false,
       changeOrders: Array.isArray(o.changeOrders)? o.changeOrders.map(normChangeOrder) : [],
@@ -4150,6 +4258,7 @@ function applyProject(d){
     customTags: Array.isArray(d.customTags)? d.customTags.map(v=>String(v)).filter(Boolean) : []
   };
   if(state.options.length===0) state.options.push(blankOption("Option 1"));
+  state.options.forEach(sanitizeLinks);   // repair link groups (single master, ≥2 members)
 
   /* Load shipMeta (v3+). Keyed by BOM row id. */
   if(d.shipMeta && typeof d.shipMeta==='object'){
@@ -4205,6 +4314,7 @@ function normRow(r){
     markup:(r.markup===null||r.markup===undefined||r.markup==="")? null : numOr(r.markup,0),
     note:String(r.note??""), source:String(r.source??""),
     tag:String(r.tag??""),
+    ...(r.linkId? {linkId:String(r.linkId), linkMaster:!!r.linkMaster} : {}),
     accessories: Array.isArray(r.accessories)? r.accessories.map(normAccessory) : [],
     pieces: Array.isArray(r.pieces)? r.pieces.map(normPiece) : [] };
 }
