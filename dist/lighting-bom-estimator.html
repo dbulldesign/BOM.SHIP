@@ -26,18 +26,22 @@
   body{font-family:var(--ui);background:var(--paper);color:var(--ink);padding:22px 26px 80px;min-height:100vh}
 
   /* ---------- Title block (drawing-sheet header) ---------- */
-  .titleblock{background:var(--sheet);border:2px solid var(--ink);display:grid;
-    grid-template-columns:.9fr 1.2fr .8fr 1fr 1fr .7fr .7fr 1fr .9fr auto;}
-  .tb-cell{border-right:1px solid var(--rule-dark);padding:10px 14px 8px;min-width:0}
-  .tb-cell:last-child{border-right:none}
+  /* Responsive field grid: cells reflow to fit the window, staying readable.
+     The container background shows through 1px gaps to draw the grid lines. */
+  .titleblock{background:var(--rule-dark);border:2px solid var(--ink);display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px}
+  .tb-cell{background:var(--sheet);padding:10px 14px 8px;min-width:0}
   .tb-label{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);display:block;margin-bottom:2px}
   .tb-cell input{border:none;outline:none;width:100%;font:600 1.05rem var(--ui);color:var(--ink);background:transparent}
   .tb-cell input.num{font-family:var(--mono);font-weight:500}
   .tb-cell input:focus{background:var(--amber-wash)}
   body.dark input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(1) brightness(1.6)}
-  .tb-actions{display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap;min-width:0}
-  .tb-actions button{white-space:nowrap}
-  .save-stamp{font-size:.68rem;color:var(--ink-soft);margin-left:4px;white-space:nowrap}
+
+  /* Action toolbar — sits below the fields so the fields get the full width. */
+  .toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    background:var(--sheet);border:2px solid var(--ink);border-top:none;padding:8px 12px}
+  .toolbar button{white-space:nowrap}
+  .save-stamp{font-size:.68rem;color:var(--ink-soft);margin-left:auto;white-space:nowrap}
   .save-stamp.dirty{color:var(--amber-deep);font-weight:600}
   .modal-wide{max-width:520px;width:92vw}
   .backups-note{font-size:.78rem;color:var(--ink-soft);margin:-4px 0 12px}
@@ -71,10 +75,20 @@
   .tab .tot{font-family:var(--mono);font-size:.72rem;color:var(--sell);font-weight:500}
   .tab-add{border:1px dashed var(--rule-dark);background:transparent;color:var(--ink-soft)}
 
-  /* ---------- Theme toggle ---------- */
-  .theme-btn{border:1px solid var(--rule-dark);background:transparent;padding:6px 10px;font-size:.9rem;
-    line-height:1;border-radius:2px;cursor:pointer;color:var(--ink-soft)}
-  .theme-btn:hover{background:var(--paper);border-color:var(--ink);color:var(--ink)}
+  /* ---------- Animated light/dark switch ---------- */
+  .theme-switch{display:inline-flex;align-items:center;cursor:pointer;user-select:none;margin-left:2px}
+  .theme-switch input{position:absolute;opacity:0;width:0;height:0}
+  .theme-track{position:relative;display:inline-block;width:52px;height:26px;border-radius:999px;
+    background:#cfd3da;border:1px solid var(--rule-dark);transition:background .25s ease}
+  .theme-thumb{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .25s ease;z-index:2}
+  .theme-switch input:checked + .theme-track{background:#2E3240}
+  .theme-switch input:checked + .theme-track .theme-thumb{transform:translateX(26px)}
+  .theme-switch input:focus-visible + .theme-track{box-shadow:0 0 0 2px var(--amber)}
+  .theme-icon{position:absolute;top:0;height:26px;display:flex;align-items:center;
+    font-size:12px;line-height:1;pointer-events:none;z-index:1}
+  .theme-icon.sun{left:6px}
+  .theme-icon.moon{right:6px}
 
   /* ---------- App view switcher ---------- */
   .viewswitch{margin-left:auto;display:flex;gap:0;border:1px solid var(--ink);border-radius:3px;overflow:hidden}
@@ -676,7 +690,6 @@
     .print-banner .pb-co{font-size:1.4rem;font-weight:800;color:#20242C;letter-spacing:.01em}
     .print-banner .pb-proj{font-size:1.05rem;font-weight:700;margin-top:2px}
     .print-banner .pb-meta{font-size:.78rem;color:#555;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap}
-    .titleblock .tb-actions{display:none !important}
   }
   /* dark-mode overrides for elements using non-variable colours */
   body.dark .tab{background:#1E2129}
@@ -705,17 +718,7 @@
   body.dark .modal-backdrop{background:rgba(0,0,0,.65)}
   body.dark .cmp-savings{background:#0F2218;border-color:#2A5C3C}
   body.dark .cmp-premium{background:#251A0A;border-color:#5C3E12}
-  @media (max-width:1280px){
-    .titleblock{grid-template-columns:1fr 1fr 1fr 1fr}
-    .tb-cell:nth-child(4n){border-right:none}
-    .tb-actions{grid-column:1 / -1;border-top:1px solid var(--rule-dark);border-right:none}
-  }
   @media (max-width:980px){
-    .titleblock{grid-template-columns:1fr 1fr}
-    .tb-cell{border-bottom:1px solid var(--rule)}
-    .tb-cell:nth-child(even){border-right:none}
-    .tb-cell:nth-child(4n){border-right:1px solid var(--rule-dark)}
-    .tb-actions{border-bottom:none}
     .stamp{width:100%}
     .opt-tools{margin-left:0}
   }
@@ -806,21 +809,29 @@
     <input id="projTaxLoc" list="usStatesList" placeholder="State / country" autocomplete="off" oninput="state.taxLocation=this.value;markDirty()"></div>
   <div class="tb-cell"><span class="tb-label">Tax verified</span>
     <input id="projTaxDate" type="date" class="num" oninput="state.taxCheckedDate=this.value;markDirty()"></div>
-  <div class="tb-cell tb-actions no-print">
-    <button class="ghost" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
-    <button class="ghost" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
-    <button class="ghost" onclick="newProject()">New</button>
-    <button class="ghost" onclick="openClick()">Open…</button>
-    <button class="primary" onclick="saveProject()">Save</button>
-    <button class="ghost" onclick="saveProject(true)">Save as…</button>
-    <button class="ghost" onclick="showBackups()" title="Local autosave backups">Backups</button>
-    <button class="ghost" onclick="exportCSV()">CSV</button>
-    <button class="ghost" onclick="exportEstimateXLSX()">Excel</button>
-    <button class="ghost" onclick="printEstimate()">Print / PDF</button>
-    <button class="theme-btn no-print" id="themeBtn" onclick="toggleTheme()" title="Toggle light / dark mode">🌙</button>
-    <span id="saveStamp" class="save-stamp"></span>
-    <input type="file" id="fileOpen" accept=".json,.lbom" style="display:none" onchange="openProject(this)">
-  </div>
+</div>
+
+<div class="toolbar no-print">
+  <button class="ghost" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+  <button class="ghost" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
+  <button class="ghost" onclick="newProject()">New</button>
+  <button class="ghost" onclick="openClick()">Open…</button>
+  <button class="primary" onclick="saveProject()">Save</button>
+  <button class="ghost" onclick="saveProject(true)">Save as…</button>
+  <button class="ghost" onclick="showBackups()" title="Local autosave backups">Backups</button>
+  <button class="ghost" onclick="exportCSV()">CSV</button>
+  <button class="ghost" onclick="exportEstimateXLSX()">Excel</button>
+  <button class="ghost" onclick="printEstimate()">Print / PDF</button>
+  <label class="theme-switch" title="Toggle light / dark mode">
+    <input type="checkbox" id="themeToggle" onchange="toggleTheme()" aria-label="Toggle light or dark mode">
+    <span class="theme-track">
+      <span class="theme-icon sun">☀</span>
+      <span class="theme-icon moon">🌙</span>
+      <span class="theme-thumb"></span>
+    </span>
+  </label>
+  <span id="saveStamp" class="save-stamp"></span>
+  <input type="file" id="fileOpen" accept=".json,.lbom" style="display:none" onchange="openProject(this)">
 </div>
 <datalist id="usStatesList"></datalist>
 <div class="beam"></div>
@@ -891,7 +902,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.3.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -957,12 +968,16 @@ function showUpdateBanner(ver,dlUrl,dlName){
 /* ================= Theme ================= */
 function applyTheme(dark){
   document.body.classList.toggle('dark', dark);
-  document.getElementById('themeBtn').textContent = dark ? '☀️' : '🌙';
+  const t = document.getElementById('themeToggle');
+  if(t) t.checked = dark;
 }
 function toggleTheme(){
-  const isDark = document.body.classList.toggle('dark');
-  document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
-  try{ localStorage.setItem('lbom_theme', isDark ? 'dark' : 'light'); }catch(e){}
+  /* Called from the switch's onchange: the checkbox already holds the desired
+     state. Fall back to inverting the current theme if invoked programmatically. */
+  const t = document.getElementById('themeToggle');
+  const dark = t ? t.checked : !document.body.classList.contains('dark');
+  applyTheme(dark);
+  try{ localStorage.setItem('lbom_theme', dark ? 'dark' : 'light'); }catch(e){}
 }
 (function initTheme(){
   try{
