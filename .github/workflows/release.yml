@@ -1,25 +1,27 @@
 name: Build & Release
 
-# Publish a new version by pushing a tag like v1.2.0:
-#   1) bump APP_VERSION in src/js/app.js to match (e.g. "1.2.0")
-#   2) node build.js  (and commit, so dist/ stays in sync)
-#   3) git tag v1.2.0 && git push origin v1.2.0
-# This workflow then builds the offline file and attaches it to a GitHub
-# Release. The in-app "Check for updates" reads that release automatically.
+# HOW RELEASES WORK (you normally do nothing here):
+#   * Automatic: when a change lands on `main` that bumps APP_VERSION in
+#     src/js/app.js to a version that has not been released yet, this builds the
+#     offline file and publishes it as a GitHub Release (tag v<version>).
+#     => To ship a new version: bump APP_VERSION, merge to main. That's it.
+#   * Manual (optional): Actions -> "Build & Release" -> "Run workflow", type a
+#     tag like v1.2.0.
+#   * Tag push (optional): git tag v1.2.0 && git push origin v1.2.0.
+# Already-released versions are skipped, so re-running never duplicates a release.
 
 on:
-  # Path 1: push a tag from your machine  ->  git tag v1.0.0 && git push origin v1.0.0
   push:
+    branches:
+      - main
     tags:
       - "v*"
-  # Path 2: no terminal needed. On GitHub: Actions -> "Build & Release" ->
-  # "Run workflow" -> type the tag (e.g. v1.0.0). Creates the tag + release for you.
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (e.g. v1.0.0)"
-        required: true
-        default: "v1.0.0"
+        description: "Release tag to publish (e.g. v1.2.0). Leave blank to use APP_VERSION."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -29,15 +31,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full history + tags to know what is already released
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      - name: Determine release tag
+        id: tag
+        run: |
+          git fetch --tags --force >/dev/null 2>&1 || true
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            VER=$(grep -E 'const APP_VERSION' src/js/app.js | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            TAG="v$VER"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already released — skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Will publish new release $TAG."
+          fi
+
       - name: Build offline HTML
+        if: steps.tag.outputs.exists == 'false'
         run: node build.js
 
       - name: Package standalone bundle (HTML + launchers)
+        if: steps.tag.outputs.exists == 'false'
         run: |
           cd dist
           zip -r "lighting-bom-estimator-bundle.zip" \
@@ -46,10 +73,10 @@ jobs:
             "Lighting BOM Estimator (Mac).command"
 
       - name: Publish GitHub Release
+        if: steps.tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          # Use the typed tag for manual runs, or the pushed tag otherwise.
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
           files: |
             dist/lighting-bom-estimator.html
