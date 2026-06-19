@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -137,13 +137,13 @@ document.addEventListener('keydown', e => {
 let _idSeed = Date.now();
 function uid(){ return 'id' + (_idSeed++).toString(36); }
 
-function blankRow(){ return {id:uid(), qty:1, type:"", mfr:"", desc:"", part:"", unitCost:0, markup:null, note:"", source:"", tag:"", accessories:[], pieces:[]}; }
+function blankRow(){ return {id:uid(), qty:1, type:"", mfr:"", desc:"", part:"", unitCost:0, mfrMult:1, markup:null, note:"", source:"", tag:"", accessories:[], pieces:[]}; }
 const FIXTURE_TAGS = ["", "Downlight", "LED Linear", "Track Lighting", "Driver", "Power Supply", "Transformer"];
 function blankAccessory(preset){
   preset = preset || {};
   return {id:uid(), desc:preset.desc||"", part:preset.part||"", mfr:preset.mfr||"MISC.",
           qty:null /* null = inherit parent qty */, unitCost:(preset.unitCost!=null?preset.unitCost:0),
-          markup:null, note:"", source:(preset.source!=null?preset.source:"")};
+          mfrMult:1, markup:null, note:"", source:(preset.source!=null?preset.source:"")};
 }
 /* accessory presets pulled from the shipping template, with default prices and KLS est source */
 const ACCESSORY_PRESETS = [
@@ -213,7 +213,8 @@ function blankChangeOrder(num, parent){
 function blankProject(){
   return { name:"", jobCode:"", client:"", preparedBy:"", company:"Focus Lighting", date:new Date().toLocaleDateString(),
            taxRate:8.875, taxLocation:"", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
-           shipMeta:{}, invoices:[], shipAdvices:[], savedAddresses:[] };
+           shipMeta:{}, invoices:[], shipAdvices:[], savedAddresses:[],
+           memory:{mfr:[],desc:[],type:[]}, customTags:[] };
 }
 let state = blankProject();
 let dirty = false;
@@ -382,19 +383,60 @@ function logoImg(){
     ? `<img class="doclogo" src="${LOGO_DATA_URI}" alt="Focus Lighting">` : "";
 }
 
+/* Manufacturer multiplier: scales the entered unit cost (defaults to 1). The
+   effective unit cost flows into both your cost and the sell price. */
+function mfrMultOf(o){ return (o.mfrMult==null||o.mfrMult==="")? 1 : numOr(o.mfrMult,1); }
 function rowCalc(row, defMarkup){
   const mk = (row.markup===null||row.markup==="")? defMarkup : numOr(row.markup,0);
-  const unitSell = Math.ceil(row.unitCost*(1+mk/100));   // =ROUNDUP(UNIT*MARKUP,0)
-  return { mk, unitSell, extCost:row.qty*row.unitCost, extSell:row.qty*unitSell };
+  const eUnit = numOr(row.unitCost,0) * mfrMultOf(row);
+  const unitSell = Math.ceil(eUnit*(1+mk/100));   // =ROUNDUP(UNIT*MULT*MARKUP,0)
+  return { mk, unitSell, extCost:row.qty*eUnit, extSell:row.qty*unitSell };
 }
 /* accessory qty inherits the parent's qty when its own qty is null/blank */
 function accQty(acc, parent){ return (acc.qty===null||acc.qty==="")? numOr(parent.qty,0) : numOr(acc.qty,0); }
 function accCalc(acc, parent, defMarkup){
   const mk = (acc.markup===null||acc.markup==="")? defMarkup : numOr(acc.markup,0);
-  const unitSell = Math.ceil(acc.unitCost*(1+mk/100));   // =ROUNDUP(UNIT*MARKUP,0)
+  const eUnit = numOr(acc.unitCost,0) * mfrMultOf(acc);
+  const unitSell = Math.ceil(eUnit*(1+mk/100));   // =ROUNDUP(UNIT*MULT*MARKUP,0)
   const q = accQty(acc, parent);
-  return { mk, qty:q, unitSell, extCost:q*acc.unitCost, extSell:q*unitSell };
+  return { mk, qty:q, unitSell, extCost:q*eUnit, extSell:q*unitSell };
 }
+/* ================= Per-project memory & custom tags =================
+   Remembered values for Manufacturer / Description / TYPE (and typed tags) are
+   stored on the project so they persist and power the type-ahead datalists. */
+function ensureMemory(){
+  if(!state.memory || typeof state.memory!=='object') state.memory={};
+  ['mfr','desc','type'].forEach(k=>{ if(!Array.isArray(state.memory[k])) state.memory[k]=[]; });
+  return state.memory;
+}
+function rememberValue(kind, val){
+  val = String(val||'').trim(); if(!val) return;
+  const arr = ensureMemory()[kind]; if(!arr) return;
+  if(!arr.some(x=>x.toLowerCase()===val.toLowerCase())){ arr.push(val); if(arr.length>2000) arr.shift(); }
+}
+function ensureTags(){ if(!Array.isArray(state.customTags)) state.customTags=[]; return state.customTags; }
+function rememberTag(val){
+  val = String(val||'').trim(); if(!val) return;
+  if(FIXTURE_TAGS.some(t=>t.toLowerCase()===val.toLowerCase())) return;
+  const arr = ensureTags();
+  if(!arr.some(x=>x.toLowerCase()===val.toLowerCase())) arr.push(val);
+}
+function tagOptions(){
+  const out=[], seen=new Set();
+  FIXTURE_TAGS.filter(Boolean).concat(ensureTags()).forEach(t=>{
+    const k=String(t).toLowerCase(); if(!seen.has(k)){ seen.add(k); out.push(t); }
+  });
+  return out;
+}
+function memoryDatalists(){
+  const opts = arr => (arr||[]).map(v=>`<option value="${esc(v)}"></option>`).join('');
+  const m = ensureMemory();
+  return `<datalist id="memMfr">${opts(m.mfr)}</datalist>`+
+         `<datalist id="memDesc">${opts(m.desc)}</datalist>`+
+         `<datalist id="memType">${opts(m.type)}</datalist>`+
+         `<datalist id="memTag">${opts(tagOptions())}</datalist>`;
+}
+
 function sectionTotals(rows, defMarkup){
   let cost=0, sell=0, qty=0;
   rows.forEach(r=>{
@@ -663,7 +705,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     return `<th class="${cls}" onclick="sortCol('${kind}','${col}')">${lbl}<span class="sort-icon">${icon}</span></th>`;
   }
   const defX = pct2x(defMarkup);
-  const NCOLS = allowAccessories ? 14 : 13;   // fixtures add a Tag column
+  const NCOLS = allowAccessories ? 15 : 14;   // fixtures add a Tag column; +1 for Mfr ×
 
   /* single markup field (accepts percent or decimal). Primary display = multiplier. */
   function mkCell(markupVal, dataAttrs, colCls){
@@ -678,22 +720,23 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const c = rowCalc(r, defMarkup);
     const da = `data-k="${kind}" data-i="${i}"`;
     const tagCell = allowAccessories
-      ? `<td class="col-tag" style="width:118px"><select class="tag-select" ${da} data-f="tag">${FIXTURE_TAGS.map(t=>`<option value="${t}" ${r.tag===t?'selected':''}>${t||'—'}</option>`).join('')}</select></td>`
+      ? `<td class="col-tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
       : '';
     return `<tr>
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
-      <td style="width:78px"><input class="up" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
+      <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
-      <td style="width:120px"><input value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
-      <td style="min-width:170px"><input value="${esc(r.desc)}" placeholder="Part description" ${da} data-f="desc"></td>
+      <td style="width:120px"><input list="memMfr" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
       <td style="width:130px"><input class="partno" value="${esc(r.part)}" placeholder="Part number" title="${esc(r.part)}" style="font-family:var(--mono)" ${da} data-f="part"></td>
+      <td style="min-width:170px"><input list="memDesc" value="${esc(r.desc)}" placeholder="Part description" ${da} data-f="desc"></td>
       <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>
+      <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(r)}" placeholder="1" title="Manufacturer multiplier (scales unit cost)" ${da} data-f="mfrMult"></td>
       ${mkCell(r.markup, da, 'col-markup')}
       <td class="calc" style="width:88px">${money(c.unitSell)}</td>
       <td class="calc" style="width:96px">${money(c.extCost)}</td>
       <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
-      <td class="col-notes" style="width:150px"><input value="${esc(r.note??'')}" placeholder="Notes" ${da} data-f="note"></td>
       <td class="col-source" style="width:130px"><input value="${esc(r.source??'')}" placeholder="Price source / date" ${da} data-f="source"></td>
+      <td class="col-notes" style="width:150px"><input value="${esc(r.note??'')}" placeholder="Notes" ${da} data-f="note"></td>
       <td style="width:74px" class="no-print row-actions">
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
@@ -713,16 +756,17 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         <td style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':a.qty}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
         <td style="width:78px"><span class="acc-pill">Acc</span></td>
         <td class="col-tag" style="width:118px"></td>
-        <td style="width:120px"><input value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
-        <td style="min-width:170px"><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Accessory (louver, lens, filter…)" ${da} data-f="accdesc"></span></td>
+        <td style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
         <td style="width:130px"><input class="partno" value="${esc(a.part)}" placeholder="Part number" title="${esc(a.part)}" style="font-family:var(--mono)" ${da} data-f="accpart"></td>
+        <td style="min-width:170px"><span class="acc-tag"><input list="memDesc" value="${esc(a.desc)}" placeholder="Accessory (louver, lens, filter…)" ${da} data-f="accdesc"></span></td>
         <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(a.unitCost)}" ${da} data-f="accunitCost"></td>
+        <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(a)}" placeholder="1" title="Manufacturer multiplier" ${da} data-f="accmfrMult"></td>
         <td class="col-markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
         <td class="calc" style="width:88px">${money(ac.unitSell)}</td>
         <td class="calc" style="width:96px">${money(ac.extCost)}</td>
         <td class="calc sell" style="width:104px">${money(ac.extSell)}</td>
-        <td class="col-notes" style="width:150px"><input value="${esc(a.note??'')}" placeholder="Notes" ${da} data-f="accnote"></td>
         <td class="col-source" style="width:130px"><input value="${esc(a.source??'')}" placeholder="Price source" ${da} data-f="accsource"></td>
+        <td class="col-notes" style="width:150px"><input value="${esc(a.note??'')}" placeholder="Notes" ${da} data-f="accnote"></td>
         <td style="width:30px" class="no-print"><button class="rowdel" title="Delete accessory" onclick="delAccessory('${kind}',${i},${ai})">✕</button></td>
       </tr>`;
     }).join("");
@@ -800,17 +844,18 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <thead><tr>
         ${th('qty','Qty','r')}
         ${th('type','Type')}
-        ${allowAccessories ? '<th class="col-tag">Tag</th>' : ''}
+        ${allowAccessories ? th('tag','Tag','col-tag') : ''}
         ${th('mfr','Manufacturer')}
-        ${th('desc','Description')}
         ${th('part','Part No.')}
+        ${th('desc','Description')}
         ${th('unitCost','Unit cost','r')}
+        <th class="r" title="Manufacturer multiplier">Mfr ×</th>
         <th class="r col-markup">Markup</th>
         ${th('unitSell','Unit sell','r')}
         ${th('extCost','Ext. cost','r')}
         ${th('extSell','Ext. sell','r')}
-        <th class="col-notes">Notes</th>
         <th class="col-source">Price source</th>
+        <th class="col-notes">Notes</th>
         <th class="no-print"></th>
       </tr></thead>
       <tbody>${body || ""}</tbody>
@@ -935,6 +980,7 @@ function renderPane(){
        <button class="ghost" onclick="unapproveOption()">Unapprove</button>`
     : `<button class="ghost approve-btn" onclick="approveOption()">Approve option</button>`;
   document.getElementById("pane").innerHTML = `
+    ${memoryDatalists()}
     <div class="opt-head ${opt.approved?'is-approved':''}">
       <input value="${esc(opt.name)}" data-optname aria-label="Option name">
       <div class="opt-tools no-print">
@@ -1345,9 +1391,10 @@ function bindPane(){
         const a = row.accessories[ai];
         if(f==="accqty")        a.qty = val.trim()===""? null : Math.max(0,numOr(val,0));
         else if(f==="accunitCost") a.unitCost = numOr(val,0);
-        else if(f==="accdesc")  a.desc = val;
+        else if(f==="accmfrMult") a.mfrMult = numOr(val,1);
+        else if(f==="accdesc"){ a.desc = val; rememberValue('desc', val); }
         else if(f==="accpart")  a.part = val;
-        else if(f==="accmfr")   a.mfr = val;
+        else if(f==="accmfr"){  a.mfr = val; rememberValue('mfr', val); }
         else if(f==="accnote")  a.note = val;
         else if(f==="accsource") a.source = val;
         else if(f==="accmarkup") a.markup = parseMarkup(val);
@@ -1356,10 +1403,14 @@ function bindPane(){
       /* normal fixture/control row */
       if(f==="qty")     row.qty = Math.max(0, numOr(val,0));
       else if(f==="unitCost") row.unitCost = numOr(val,0);
+      else if(f==="mfrMult")  row.mfrMult = numOr(val,1);
       else if(f==="markup")   row.markup = parseMarkup(val);
       else if(f==="note")     row.note = val;
       else if(f==="source")   row.source = val;
-      else if(f==="type")     row.type = val.toUpperCase();
+      else if(f==="type"){    row.type = val.toUpperCase(); rememberValue('type', row.type); }
+      else if(f==="mfr"){     row.mfr = val; rememberValue('mfr', val); }
+      else if(f==="desc"){    row.desc = val; rememberValue('desc', val); }
+      else if(f==="tag"){     row.tag = val; rememberTag(val); }
       else row[f] = val;
       markDirty(); render();
     });
@@ -2996,7 +3047,9 @@ function applyProject(d){
     shipMeta:{},
     invoices: Array.isArray(d.invoices)? d.invoices.map(normInvoice) : [],
     shipAdvices: Array.isArray(d.shipAdvices)? d.shipAdvices.map(normAdvice) : [],
-    savedAddresses: Array.isArray(d.savedAddresses)? d.savedAddresses.map(normAddress) : []
+    savedAddresses: Array.isArray(d.savedAddresses)? d.savedAddresses.map(normAddress) : [],
+    memory: normMemory(d.memory),
+    customTags: Array.isArray(d.customTags)? d.customTags.map(v=>String(v)).filter(Boolean) : []
   };
   if(state.options.length===0) state.options.push(blankOption("Option 1"));
 
@@ -3048,18 +3101,26 @@ function normAddress(a){
 }
 function normRow(r){
   if(r && r.isSection) return { id:r.id||uid(), isSection:true, name:String(r.name||'Section') };
-  return { id:r.id||uid(), qty:numOr(r.qty,0), type:String(r.type??""), mfr:String(r.mfr??""),
+  return { id:r.id||uid(), qty:numOr(r.qty,0), type:String(r.type??"").toUpperCase(), mfr:String(r.mfr??""),
     desc:String(r.desc??""), part:String(r.part??""), unitCost:numOr(r.unitCost,0),
+    mfrMult:(r.mfrMult==null||r.mfrMult==="")?1:numOr(r.mfrMult,1),
     markup:(r.markup===null||r.markup===undefined||r.markup==="")? null : numOr(r.markup,0),
     note:String(r.note??""), source:String(r.source??""),
-    tag:FIXTURE_TAGS.includes(r.tag)?r.tag:"",
+    tag:String(r.tag??""),
     accessories: Array.isArray(r.accessories)? r.accessories.map(normAccessory) : [],
     pieces: Array.isArray(r.pieces)? r.pieces.map(normPiece) : [] };
+}
+function normMemory(m){
+  const o = {mfr:[], desc:[], type:[]};
+  if(m && typeof m==='object'){
+    ['mfr','desc','type'].forEach(k=>{ if(Array.isArray(m[k])) o[k] = m[k].map(v=>String(v)).filter(Boolean); });
+  }
+  return o;
 }
 function normPiece(pc){ return { id:pc.id||uid(), length:String(pc.length??""), qty:numOr(pc.qty,0) }; }
 function normAccessory(a){ return { id:a.id||uid(), desc:String(a.desc??""), part:String(a.part??""),
   mfr:String(a.mfr??"Misc."), qty:(a.qty===null||a.qty===undefined||a.qty==="")? null : numOr(a.qty,0),
-  unitCost:numOr(a.unitCost,0),
+  unitCost:numOr(a.unitCost,0), mfrMult:(a.mfrMult==null||a.mfrMult==="")?1:numOr(a.mfrMult,1),
   markup:(a.markup===null||a.markup===undefined||a.markup==="")? null : numOr(a.markup,0),
   note:String(a.note??""), source:String(a.source??"") }; }
 function normServiceGroup(g){
