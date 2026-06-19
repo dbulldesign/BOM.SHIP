@@ -730,6 +730,48 @@
   .update-banner .upd-x{background:transparent;border:0;color:#bcd2f4;font-size:20px;
     line-height:1;cursor:pointer;padding:0 4px}
   .update-banner .upd-x:hover{color:#fff}
+
+  /* ===== Row actions (duplicate / save-to-library / delete) ===== */
+  td.row-actions{white-space:nowrap;text-align:right}
+  .rowact{border:none;background:none;color:#C0BCAE;font-size:.95rem;padding:4px 5px;line-height:1;cursor:pointer}
+  .rowact:hover{color:var(--amber-deep);background:none}
+  .rowact.star.saved{color:var(--amber-deep)}
+
+  /* ===== Floating "always visible" total (feature: sticky totals) ===== */
+  .mini-total{position:fixed;right:20px;bottom:20px;z-index:40;background:var(--ink);color:#fff;
+    border-radius:8px;box-shadow:0 6px 22px rgba(20,24,32,.34);padding:9px 16px;cursor:pointer;
+    display:flex;align-items:baseline;gap:12px;font-size:.78rem;border:1px solid rgba(255,255,255,.12)}
+  .mini-total:hover{box-shadow:0 8px 28px rgba(20,24,32,.46)}
+  .mini-total .mt-lbl{color:#E9B45C;letter-spacing:.1em;text-transform:uppercase;font-weight:700;font-size:.62rem}
+  .mini-total .mt-val{font-family:var(--mono);font-size:1.05rem;font-weight:600}
+  .mini-total .mt-margin{color:#9fb8c9;font-family:var(--mono);font-size:.72rem}
+  @media print{ .mini-total{display:none!important} }
+
+  /* ===== Generic dynamic modal (paste / library) ===== */
+  .modal-xwide{max-width:720px;width:94vw}
+  .modal-body{margin-bottom:18px}
+  .paste-area{width:100%;min-height:170px;font-family:var(--mono);font-size:.8rem;padding:8px 10px;
+    border:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);resize:vertical;line-height:1.5}
+  .paste-help{font-size:.78rem;color:var(--ink-soft);line-height:1.55;margin-bottom:10px}
+  .paste-help code{font-family:var(--mono);background:var(--amber-wash);padding:1px 5px;border-radius:3px;color:var(--amber-deep)}
+  .paste-opts{display:flex;align-items:center;gap:16px;margin:10px 0;font-size:.8rem;color:var(--ink-soft)}
+  .paste-opts label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  .modal-target{font-weight:700;color:var(--ink)}
+
+  /* ===== Parts library ===== */
+  .lib-search{width:100%;padding:8px 10px;border:1px solid var(--rule-dark);background:var(--sheet);
+    color:var(--ink);font-size:.84rem;margin-bottom:10px}
+  .lib-list{max-height:46vh;overflow-y:auto;border:1px solid var(--rule);border-radius:3px}
+  .lib-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--rule);font-size:.82rem}
+  .lib-item:last-child{border-bottom:none}
+  .lib-item:hover{background:var(--amber-wash)}
+  body.dark .lib-item:hover{background:#2A2310}
+  .lib-main{flex:1;min-width:0}
+  .lib-type{font-weight:700;color:var(--ink);margin-right:6px}
+  .lib-desc{color:var(--ink-soft)}
+  .lib-meta{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);white-space:nowrap}
+  .lib-empty{padding:22px;text-align:center;color:var(--ink-soft);font-size:.84rem}
+  .lib-item .ghost{font-size:.74rem;padding:4px 10px}
 </style>
 </head>
 <body>
@@ -765,6 +807,8 @@
   <div class="tb-cell"><span class="tb-label">Tax verified</span>
     <input id="projTaxDate" type="date" class="num" oninput="state.taxCheckedDate=this.value;markDirty()"></div>
   <div class="tb-cell tb-actions no-print">
+    <button class="ghost" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+    <button class="ghost" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
     <button class="ghost" onclick="newProject()">New</button>
     <button class="ghost" onclick="openClick()">Open…</button>
     <button class="primary" onclick="saveProject()">Save</button>
@@ -819,6 +863,7 @@
 <div id="adviceView" style="display:none"></div>
 
 <div class="toast" id="toast"></div>
+<div id="miniTotal" class="mini-total no-print" style="display:none" onclick="scrollToTotals()" title="Jump to totals"></div>
 
 <script>
 /* === Embedded SheetJS (xlsx) mini build for offline Excel export === */
@@ -847,7 +892,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -954,7 +999,7 @@ function modalCancel(){
   if(_modalResolve){ _modalResolve(false); _modalResolve = null; }
 }
 document.addEventListener('keydown', e => {
-  if(e.key === 'Escape') modalCancel();
+  if(e.key === 'Escape'){ if(_modalEl) closeModal(); else modalCancel(); }
 });
 /* ================= Data model ================= */
 /* unique id generator (defined before first use in blankRow) */
@@ -1043,7 +1088,65 @@ let state = blankProject();
 let dirty = false;
 let lastSavedAt = null;     // timestamp of last successful file save
 let lastChangeAt = null;    // timestamp of last edit
-function markDirty(){ dirty = true; lastChangeAt = Date.now(); scheduleAutosave(); updateSaveStamp(); }
+function markDirty(){ dirty = true; lastChangeAt = Date.now(); scheduleAutosave(); scheduleHistory(); updateSaveStamp(); }
+
+/* ================= Undo / Redo =================
+ * Snapshot-based history. Every committed change funnels through markDirty(), so
+ * we coalesce rapid edits (e.g. typing) with a short debounce and store full
+ * serialized snapshots. _historyBase always holds the last committed snapshot;
+ * undoStack holds the snapshots *before* each change, redoStack the ones undone. */
+const HISTORY_MAX = 60;
+let undoStack = [];
+let redoStack = [];
+let _historyBase = null;
+let _historyTimer = null;
+function snapshot(){ return JSON.stringify(state); }
+function resetHistory(){ _historyBase = snapshot(); undoStack = []; redoStack = []; if(_historyTimer){ clearTimeout(_historyTimer); _historyTimer=null; } updateUndoButtons(); }
+function scheduleHistory(){ if(_historyTimer) clearTimeout(_historyTimer); _historyTimer = setTimeout(commitHistory, 450); }
+function commitHistory(){
+  if(_historyTimer){ clearTimeout(_historyTimer); _historyTimer = null; }
+  const snap = snapshot();
+  if(snap === _historyBase) return;
+  if(_historyBase !== null){
+    undoStack.push(_historyBase);
+    if(undoStack.length > HISTORY_MAX) undoStack.shift();
+  }
+  _historyBase = snap;
+  redoStack = [];
+  updateUndoButtons();
+}
+function applySnapshot(json){
+  try{ state = JSON.parse(json); }catch(e){ return; }
+  dirty = true;
+  closeAccMenus();
+  if(view !== 'estimate') setView('estimate');
+  else render();
+  updateSaveStamp();
+}
+function undo(){
+  commitHistory();                 // flush any pending edit first
+  if(!undoStack.length){ toast("Nothing to undo"); return; }
+  redoStack.push(_historyBase);
+  const prev = undoStack.pop();
+  _historyBase = prev;
+  applySnapshot(prev);
+  updateUndoButtons();
+  toast("Undo");
+}
+function redo(){
+  if(!redoStack.length){ toast("Nothing to redo"); return; }
+  undoStack.push(_historyBase);
+  const next = redoStack.pop();
+  _historyBase = next;
+  applySnapshot(next);
+  updateUndoButtons();
+  toast("Redo");
+}
+function updateUndoButtons(){
+  const u = document.getElementById('undoBtn'), r = document.getElementById('redoBtn');
+  if(u) u.disabled = undoStack.length === 0;
+  if(r) r.disabled = redoStack.length === 0;
+}
 
 /* ---- Autosave / local backup ----
    Keeps the most recent snapshots in localStorage so a crash or misclick can't
@@ -1261,7 +1364,7 @@ function paneTabbables(){
   const pane = document.getElementById('pane');
   if(!pane) return [];
   return Array.from(pane.querySelectorAll('input, select, textarea, button'))
-    .filter(el => !el.disabled && el.offsetParent !== null);
+    .filter(el => !el.disabled && el.offsetParent !== null && el.tabIndex !== -1);
 }
 let _pendingTabIndex = null;   // set on Tab keydown; consumed after re-render
 let bomFilter = '';            // find/filter text for the BOM tables
@@ -1369,14 +1472,14 @@ function render(){
   document.title = (state.name? state.name+" — ":"") + "Lighting BOM Estimator";
   renderRecents();
 
-  if(view === 'shipping'){ renderShipping(); return; }
-  if(view === 'advice'){ renderAdvice(); return; }
+  if(view === 'shipping'){ renderShipping(); updateMiniTotal(); return; }
+  if(view === 'advice'){ renderAdvice(); updateMiniTotal(); return; }
 
   /* tabs */
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = state.options.map((o,i)=>{
     const t = optionTotals(o);
-    return `<button class="tab ${i===state.current?'active':''}" onclick="state.current=${i};render()">
+    return `<button class="tab ${i===state.current?'active':''}" onclick="selectOption(${i})">
       ${esc(o.name)} <span class="tot">${money(t.grand)}</span></button>`;
   }).join("") + `<button class="tab tab-add" onclick="addOption()">+ Add option</button>`;
 
@@ -1460,7 +1563,11 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
       <td class="col-notes" style="width:150px"><input value="${esc(r.note??'')}" placeholder="Notes" ${da} data-f="note"></td>
       <td class="col-source" style="width:130px"><input value="${esc(r.source??'')}" placeholder="Price source / date" ${da} data-f="source"></td>
-      <td style="width:30px" class="no-print"><button class="rowdel" title="Delete ${allowAccessories?'fixture':'control'}" onclick="delRow('${kind}',${i})">✕</button></td>
+      <td style="width:74px" class="no-print row-actions">
+        <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
+        <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
+        <button class="rowdel" tabindex="-1" title="Delete ${allowAccessories?'fixture':'control'}" onclick="delRow('${kind}',${i})">✕</button>
+      </td>
     </tr>`;
   }
   function accessoryRowsHTML(r, i){
@@ -1532,6 +1639,8 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     : `<button class="ghost" onclick="dupControlsToNewOption()" title="Copy these controls into a new option so you can pair them with different fixtures">⎘ Duplicate controls →</button>`;
   const addBtns = `<button class="ghost" onclick="addRow('${kind}')">+ Add ${allowAccessories?'fixture':'control'}</button>
       <button class="ghost" onclick="addSection('${kind}')">+ Add section</button>
+      <button class="ghost" onclick="openPasteModal('${kind}')" title="Paste rows from Excel or a spreadsheet">⊞ Paste rows</button>
+      <button class="ghost" onclick="openLibrary('${kind}')" title="Insert a saved part from your library">★ Library</button>
       ${dupBtn}`;
 
   return `<div class="section">
@@ -1625,7 +1734,10 @@ function servicesTable(opt){
         <td class="calc" style="width:96px">${money(c.extCost)}</td>
         <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
         <td style="min-width:150px"><input value="${esc(s.note??'')}" placeholder="Notes" ${da} data-f="note"></td>
-        <td style="width:30px" class="no-print"><button class="rowdel" title="Delete service line" onclick="delService(${gi},${si})">✕</button></td>
+        <td style="width:52px" class="no-print row-actions">
+          <button class="rowact" tabindex="-1" title="Duplicate this service line" onclick="dupService(${gi},${si})">⎘</button>
+          <button class="rowdel" tabindex="-1" title="Delete service line" onclick="delService(${gi},${si})">✕</button>
+        </td>
       </tr>`;
     }).join('');
     const gTot = servicesTotals([g], defMarkup);
@@ -1724,6 +1836,7 @@ function renderPane(){
     </div>
     ${opt.approved ? changeOrdersSection(opt) : ''}`;
   bindPane();
+  updateMiniTotal();
 }
 
 /* Change Orders area — shown once an option is approved. Each CO is its own mini-BOM. */
@@ -1981,7 +2094,7 @@ function renderCompare(){
 
     const margin = t.sub>0 ? ((t.sub-t.cost)/t.sub*100).toFixed(1) : "0.0";
 
-    return `<div class="cmp-card${isActive?' active':''}${isCheapest&&!isActive?' cheapest':''}" onclick="state.current=${i};render()">
+    return `<div class="cmp-card${isActive?' active':''}${isCheapest&&!isActive?' cheapest':''}" onclick="selectOption(${i})">
       ${badge}
       <div class="cmp-card-name">${esc(o.name)}</div>
       <div class="cmp-bar-wrap">
@@ -2008,7 +2121,7 @@ function renderCompare(){
         <span class="rl">Total with tax</span><span class="rv">${money(t.grand)}</span>
       </div>
       ${savingsTag}
-      <button class="cmp-card-goto no-print" onclick="event.stopPropagation();state.current=${i};render()">View option →</button>
+      <button class="cmp-card-goto no-print" onclick="event.stopPropagation();selectOption(${i})">View option →</button>
     </div>`;
   }).join("");
 
@@ -2241,8 +2354,223 @@ function addServiceGroup(){ ensureServices().push(blankServiceGroup("Services"))
 function delServiceGroup(gi){ ensureServices().splice(gi,1); markDirty(); render(); }
 function addService(gi){ ensureServices()[gi].rows.push(blankService()); markDirty(); render(); }
 function delService(gi,si){ ensureServices()[gi].rows.splice(si,1); markDirty(); render(); }
+function dupService(gi,si){
+  const rows = ensureServices()[gi].rows;
+  if(!rows[si]) return;
+  const copy = JSON.parse(JSON.stringify(rows[si])); copy.id = uid();
+  rows.splice(si+1, 0, copy); markDirty(); render();
+}
+
+/* ---- Duplicate a single fixture/control row (with fresh ids) ---- */
+function dupRow(kind, i){
+  if(!guardBaseEdit()) return;
+  const arr = state.options[state.current][kind];
+  const src = arr[i];
+  if(!src || src.isSection) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid();
+  if(copy.accessories) copy.accessories.forEach(a=>a.id=uid());
+  if(copy.pieces) copy.pieces.forEach(pc=>pc.id=uid());
+  arr.splice(i+1, 0, copy);
+  markDirty(); render();
+}
+
+/* Guard inserts/edits into an approved+locked base. Returns true if allowed,
+   otherwise prompts to unlock and returns false. */
+function guardBaseEdit(){
+  if(baseEditAllowed()) return true;
+  showConfirm('Edit approved base?', 'This option is approved and its base is locked to protect the agreed bid. Unlock the base to add parts? (Change orders are the usual way to add scope.)', 'Unlock base', 'primary').then(ok=>{
+    if(ok){ _baseUnlockAck = true; state.options[state.current].baseLocked = false; markDirty(); render(); toast('Base unlocked'); }
+  });
+  return false;
+}
+
+/* ================= Generic modal (paste / library) ================= */
+let _modalEl = null;
+function openModal(opts){
+  closeModal();
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.style.display = 'flex';
+  back.innerHTML = `<div class="modal ${opts.wide?'modal-xwide':'modal-wide'}">
+    <h4>${esc(opts.title)}</h4>
+    <div class="modal-body">${opts.bodyHTML}</div>
+    <div class="modal-btns">
+      <button class="ghost" data-mclose>Cancel</button>
+      ${opts.confirmLabel?`<button class="${opts.confirmClass||'primary'}" data-mok>${esc(opts.confirmLabel)}</button>`:''}
+    </div>
+  </div>`;
+  back.addEventListener('click', e=>{ if(e.target===back) closeModal(); });
+  back.querySelector('[data-mclose]').addEventListener('click', closeModal);
+  const ok = back.querySelector('[data-mok]');
+  if(ok && opts.onConfirm) ok.addEventListener('click', ()=>opts.onConfirm(back));
+  document.body.appendChild(back);
+  _modalEl = back;
+  if(opts.onOpen) opts.onOpen(back);
+  return back;
+}
+function closeModal(){ if(_modalEl){ _modalEl.remove(); _modalEl = null; } }
+
+/* ================= Paste rows from a spreadsheet ================= */
+const PASTE_FIELDS = ['qty','type','mfr','desc','part','unitCost','markup'];
+const HEADER_SYNONYMS = {
+  qty:['qty','quantity','count','qnty','ea'],
+  type:['type','mark','fixturetype','symbol'],
+  mfr:['mfr','manufacturer','make','vendor','brand','mfg'],
+  desc:['desc','description','item','product','name','fixture'],
+  part:['part','partno','partnumber','part#','catalog','catalognumber','model','sku','cat#','cat'],
+  unitCost:['unitcost','cost','price','unitprice','net','buy','each','listprice','list'],
+  markup:['markup','margin','markup%']
+};
+function _normHead(s){ return String(s).toLowerCase().replace(/[^a-z0-9#]/g,''); }
+function detectHeaderMap(cells){
+  const map = {}; let hits = 0;
+  cells.forEach((c,idx)=>{
+    const n = _normHead(c);
+    for(const field in HEADER_SYNONYMS){
+      if(HEADER_SYNONYMS[field].some(syn=>_normHead(syn)===n)){ map[idx]=field; hits++; break; }
+    }
+  });
+  return hits>=2 ? map : null;   // need ≥2 recognizable headers to treat row 1 as headers
+}
+function splitCells(line){
+  if(line.includes('\t')) return line.split('\t');
+  if(line.includes(',')) return line.split(',');
+  return line.split(/\s{2,}/);
+}
+function parsePasteText(text){
+  const lines = String(text||'').replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+  if(!lines.length) return [];
+  const headerMap = detectHeaderMap(splitCells(lines[0]).map(c=>c.trim()));
+  const dataLines = headerMap ? lines.slice(1) : lines;
+  const out = [];
+  dataLines.forEach(line=>{
+    const cells = splitCells(line).map(c=>c.trim());
+    if(cells.every(c=>c==='')) return;
+    const row = blankRow();
+    const assign = (field, raw)=>{
+      if(raw===undefined || raw==='') return;
+      if(field==='qty') row.qty = Math.max(0, numOr(raw,1));
+      else if(field==='unitCost') row.unitCost = numOr(raw,0);
+      else if(field==='markup') row.markup = parseMarkup(raw);
+      else row[field] = raw;
+    };
+    cells.forEach((c,idx)=>{
+      const field = headerMap ? headerMap[idx] : PASTE_FIELDS[idx];
+      if(field) assign(field, c);
+    });
+    out.push(row);
+  });
+  return out;
+}
+function openPasteModal(kind){
+  const kindLabel = kind==='fixtures' ? 'fixtures' : 'controls';
+  const body = `
+    <div class="paste-help">Copy a block of cells from Excel or Google Sheets and paste below. Expected column order:
+      <br><code>Qty</code> <code>Type</code> <code>Manufacturer</code> <code>Description</code> <code>Part&nbsp;#</code> <code>Unit&nbsp;cost</code> <code>Markup</code> <span style="opacity:.7">(only Qty + Description needed; trailing columns optional)</span>
+      <br>A header row is detected and skipped automatically.</div>
+    <textarea class="paste-area" id="pasteArea" placeholder="10&#9;F1&#9;Focus&#9;6&quot; LED downlight&#9;DL-6-30K&#9;82.50&#10;4&#9;F2&#9;Focus&#9;Wall wash&#9;WW-2&#9;120"></textarea>
+    <div class="paste-opts">
+      <label><input type="checkbox" id="pasteReplace"> Replace existing ${kindLabel} first</label>
+      <span id="pastePreview"></span>
+    </div>`;
+  openModal({
+    title:`Paste ${kindLabel} from a spreadsheet`, bodyHTML:body, confirmLabel:'Import rows', wide:true,
+    onOpen(back){
+      const ta = back.querySelector('#pasteArea');
+      const prev = back.querySelector('#pastePreview');
+      const upd = ()=>{ const n = parsePasteText(ta.value).length; prev.textContent = ta.value.trim() ? `${n} row${n===1?'':'s'} detected` : ''; };
+      ta.addEventListener('input', upd); ta.focus();
+    },
+    onConfirm(back){
+      const rows = parsePasteText(back.querySelector('#pasteArea').value);
+      if(!rows.length){ toast('Nothing to import — paste some rows first'); return; }
+      if(!guardBaseEdit()){ closeModal(); return; }
+      const arr = state.options[state.current][kind];
+      if(back.querySelector('#pasteReplace').checked) arr.length = 0;
+      rows.forEach(r=>arr.push(r));
+      markDirty(); closeModal(); render();
+      toast(`Imported ${rows.length} ${kind==='fixtures'?'fixture':'control'}${rows.length===1?'':'s'}`);
+    }
+  });
+}
+
+/* ================= Parts library (local, offline) ================= */
+const PARTS_KEY = 'lbom_parts_v1';
+function loadParts(){ try{ const a=JSON.parse(localStorage.getItem(PARTS_KEY)); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function savePartsArr(a){ try{ localStorage.setItem(PARTS_KEY, JSON.stringify(a)); }catch(e){} }
+function savePartFromRow(kind, i){
+  const r = state.options[state.current][kind][i];
+  if(!r || r.isSection) return;
+  if(!r.type && !r.desc && !r.part){ toast('Add a type, description, or part # first'); return; }
+  const p = { id:uid(), type:r.type||'', mfr:r.mfr||'', desc:r.desc||'', part:r.part||'', unitCost:numOr(r.unitCost,0), markup:r.markup, tag:r.tag||'' };
+  const arr = loadParts();
+  const dupe = arr.find(x=>x.part===p.part && x.desc===p.desc && x.type===p.type);
+  if(dupe){ Object.assign(dupe, {mfr:p.mfr, unitCost:p.unitCost, markup:p.markup, tag:p.tag}); savePartsArr(arr); toast('Updated in library'); }
+  else { arr.unshift(p); savePartsArr(arr); toast('Saved to library ★'); }
+}
+function deletePart(id){ savePartsArr(loadParts().filter(p=>p.id!==id)); }
+function insertPartFromLib(id, kind){
+  const p = loadParts().find(x=>x.id===id);
+  if(!p) return;
+  if(!guardBaseEdit()){ closeModal(); return; }
+  const r = blankRow();
+  r.type=p.type||''; r.mfr=p.mfr||''; r.desc=p.desc||''; r.part=p.part||'';
+  r.unitCost=numOr(p.unitCost,0); r.markup=p.markup; r.tag=p.tag||'';
+  state.options[state.current][kind].push(r);
+  markDirty(); closeModal(); render();
+  toast('Inserted "'+(p.type||p.desc||p.part||'part')+'"');
+}
+function openLibrary(kind){
+  const listHTML = (filter='')=>{
+    const arr = loadParts();
+    if(!arr.length) return `<div class="lib-empty">Your parts library is empty.<br>Click the ★ on any row to save a part here, then insert it into future estimates.</div>`;
+    const q = filter.trim().toLowerCase();
+    const shown = q ? arr.filter(p=>[p.type,p.mfr,p.desc,p.part].join(' ').toLowerCase().includes(q)) : arr;
+    if(!shown.length) return `<div class="lib-empty">No saved parts match "${esc(filter)}".</div>`;
+    return `<div class="lib-list">${shown.map(p=>`<div class="lib-item">
+        <div class="lib-main"><span class="lib-type">${esc(p.type||'—')}</span><span class="lib-desc">${esc(p.desc||'')}${p.part?' · '+esc(p.part):''}</span></div>
+        <span class="lib-meta">${money(numOr(p.unitCost,0))}</span>
+        <button class="primary" data-ins="${p.id}">Insert</button>
+        <button class="rowdel" data-del="${p.id}" title="Remove from library">✕</button>
+      </div>`).join('')}</div>`;
+  };
+  const body = `<input class="lib-search" id="libSearch" placeholder="Search saved parts…" autocomplete="off">
+    <div id="libListWrap">${listHTML()}</div>`;
+  openModal({
+    title:'Parts library', bodyHTML:body, wide:true,
+    onOpen(back){
+      const wrap = back.querySelector('#libListWrap');
+      const search = back.querySelector('#libSearch');
+      const bind = ()=>{
+        wrap.querySelectorAll('[data-ins]').forEach(b=> b.addEventListener('click', ()=>insertPartFromLib(b.dataset.ins, kind)));
+        wrap.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{ deletePart(b.dataset.del); wrap.innerHTML = listHTML(search.value); bind(); }));
+      };
+      search.addEventListener('input', ()=>{ wrap.innerHTML = listHTML(search.value); bind(); });
+      bind(); search.focus();
+    }
+  });
+}
+
+/* ================= Floating "always visible" total ================= */
+function updateMiniTotal(){
+  const el = document.getElementById('miniTotal');
+  if(!el) return;
+  const opt = state.options[state.current];
+  if(view!=='estimate' || !opt){ el.style.display='none'; return; }
+  const t = optionTotals(opt);
+  const margin = t.sub>0 ? ((t.sub-t.cost)/t.sub*100) : 0;
+  el.innerHTML = `<span class="mt-lbl">${esc(opt.name)}</span>`+
+                 `<span class="mt-val">${money(t.grand)}</span>`+
+                 `<span class="mt-margin">${margin.toFixed(1)}% margin</span>`;
+  el.style.display = 'flex';
+}
+function scrollToTotals(){ const s=document.querySelector('#pane .stamp'); if(s) s.scrollIntoView({behavior:'smooth', block:'center'}); }
 
 function addOption(){ state.options.push(blankOption("Option "+(state.options.length+1))); state.current=state.options.length-1; markDirty(); render(); }
+/* Switching the active option is not itself an undoable edit. Flush any pending
+   edit into history, switch, then re-sync the history base so undo doesn't jump tabs. */
+function selectOption(i){ commitHistory(); state.current=i; render(); _historyBase = snapshot(); updateUndoButtons(); }
 function freshIds(copy){
   ['fixtures','controls'].forEach(k=>{
     (copy[k]||[]).forEach(r=>{
@@ -3552,6 +3880,7 @@ function applyProject(d){
       state.shipMeta[rowId] = m;
     });
   }
+  resetHistory();
 }
 function normMeta(s){
   const m = blankMeta();
@@ -3779,11 +4108,14 @@ async function newProject(){
     if(!ok) return;
   }
   fileHandle = null;
-  state = blankProject(); dirty=false; render();
+  state = blankProject(); dirty=false; resetHistory(); render();
 }
 window.addEventListener("beforeunload", e=>{ if(dirty){ e.preventDefault(); e.returnValue=""; } });
 window.addEventListener("keydown", e=>{
   const mod = e.ctrlKey||e.metaKey;
+  /* Undo / Redo. Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo. */
+  if(mod && e.key.toLowerCase()==="z" && !e.shiftKey){ e.preventDefault(); undo(); return; }
+  if(mod && (e.key.toLowerCase()==="y" || (e.key.toLowerCase()==="z" && e.shiftKey))){ e.preventDefault(); redo(); return; }
   if(mod && e.key.toLowerCase()==="s"){ e.preventDefault(); saveProject(); return; }
   if(mod && e.key.toLowerCase()==="o"){ e.preventDefault(); openClick(); return; }
   /* Ctrl/Cmd+F → focus the BOM find box (estimate view) */
@@ -3802,6 +4134,7 @@ window.addEventListener("keydown", e=>{
 render();
 updateSaveStamp();
 applyColVis();
+resetHistory();
 document.addEventListener('click', ()=>{ const m=document.getElementById('colMenu'); if(m) m.style.display='none'; });
 </script>
 </body>

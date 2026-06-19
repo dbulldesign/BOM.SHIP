@@ -41,6 +41,8 @@
   <div class="tb-cell"><span class="tb-label">Tax verified</span>
     <input id="projTaxDate" type="date" class="num" oninput="state.taxCheckedDate=this.value;markDirty()"></div>
   <div class="tb-cell tb-actions no-print">
+    <button class="ghost" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+    <button class="ghost" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
     <button class="ghost" onclick="newProject()">New</button>
     <button class="ghost" onclick="openClick()">Open…</button>
     <button class="primary" onclick="saveProject()">Save</button>
@@ -95,6 +97,7 @@
 <div id="adviceView" style="display:none"></div>
 
 <div class="toast" id="toast"></div>
+<div id="miniTotal" class="mini-total no-print" style="display:none" onclick="scrollToTotals()" title="Jump to totals"></div>
 
 <!-- INJECT:VENDOR -->
 <!-- INJECT:APP -->
