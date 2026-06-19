@@ -40,21 +40,29 @@
     <input id="projTaxLoc" list="usStatesList" placeholder="State / country" autocomplete="off" oninput="state.taxLocation=this.value;markDirty()"></div>
   <div class="tb-cell"><span class="tb-label">Tax verified</span>
     <input id="projTaxDate" type="date" class="num" oninput="state.taxCheckedDate=this.value;markDirty()"></div>
-  <div class="tb-cell tb-actions no-print">
-    <button class="ghost" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
-    <button class="ghost" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
-    <button class="ghost" onclick="newProject()">New</button>
-    <button class="ghost" onclick="openClick()">Open…</button>
-    <button class="primary" onclick="saveProject()">Save</button>
-    <button class="ghost" onclick="saveProject(true)">Save as…</button>
-    <button class="ghost" onclick="showBackups()" title="Local autosave backups">Backups</button>
-    <button class="ghost" onclick="exportCSV()">CSV</button>
-    <button class="ghost" onclick="exportEstimateXLSX()">Excel</button>
-    <button class="ghost" onclick="printEstimate()">Print / PDF</button>
-    <button class="theme-btn no-print" id="themeBtn" onclick="toggleTheme()" title="Toggle light / dark mode">🌙</button>
-    <span id="saveStamp" class="save-stamp"></span>
-    <input type="file" id="fileOpen" accept=".json,.lbom" style="display:none" onchange="openProject(this)">
-  </div>
+</div>
+
+<div class="toolbar no-print">
+  <button class="ghost" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+  <button class="ghost" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
+  <button class="ghost" onclick="newProject()">New</button>
+  <button class="ghost" onclick="openClick()">Open…</button>
+  <button class="primary" onclick="saveProject()">Save</button>
+  <button class="ghost" onclick="saveProject(true)">Save as…</button>
+  <button class="ghost" onclick="showBackups()" title="Local autosave backups">Backups</button>
+  <button class="ghost" onclick="exportCSV()">CSV</button>
+  <button class="ghost" onclick="exportEstimateXLSX()">Excel</button>
+  <button class="ghost" onclick="printEstimate()">Print / PDF</button>
+  <label class="theme-switch" title="Toggle light / dark mode">
+    <input type="checkbox" id="themeToggle" onchange="toggleTheme()" aria-label="Toggle light or dark mode">
+    <span class="theme-track">
+      <span class="theme-icon sun">☀</span>
+      <span class="theme-icon moon">🌙</span>
+      <span class="theme-thumb"></span>
+    </span>
+  </label>
+  <span id="saveStamp" class="save-stamp"></span>
+  <input type="file" id="fileOpen" accept=".json,.lbom" style="display:none" onchange="openProject(this)">
 </div>
 <datalist id="usStatesList"></datalist>
 <div class="beam"></div>

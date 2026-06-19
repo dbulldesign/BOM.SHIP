@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.3.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -77,12 +77,16 @@ function showUpdateBanner(ver,dlUrl,dlName){
 /* ================= Theme ================= */
 function applyTheme(dark){
   document.body.classList.toggle('dark', dark);
-  document.getElementById('themeBtn').textContent = dark ? '☀️' : '🌙';
+  const t = document.getElementById('themeToggle');
+  if(t) t.checked = dark;
 }
 function toggleTheme(){
-  const isDark = document.body.classList.toggle('dark');
-  document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
-  try{ localStorage.setItem('lbom_theme', isDark ? 'dark' : 'light'); }catch(e){}
+  /* Called from the switch's onchange: the checkbox already holds the desired
+     state. Fall back to inverting the current theme if invoked programmatically. */
+  const t = document.getElementById('themeToggle');
+  const dark = t ? t.checked : !document.body.classList.contains('dark');
+  applyTheme(dark);
+  try{ localStorage.setItem('lbom_theme', dark ? 'dark' : 'light'); }catch(e){}
 }
 (function initTheme(){
   try{
