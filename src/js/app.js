@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -591,8 +591,8 @@ function render(){
   document.title = (state.name? state.name+" — ":"") + "Lighting BOM Estimator";
   renderRecents();
 
-  if(view === 'shipping'){ renderShipping(); updateMiniTotal(); return; }
-  if(view === 'advice'){ renderAdvice(); updateMiniTotal(); return; }
+  if(view === 'shipping'){ renderShipping(); return; }
+  if(view === 'advice'){ renderAdvice(); return; }
 
   /* tabs */
   const tabs = document.getElementById("tabs");
@@ -955,7 +955,6 @@ function renderPane(){
     </div>
     ${opt.approved ? changeOrdersSection(opt) : ''}`;
   bindPane();
-  updateMiniTotal();
 }
 
 /* Change Orders area — shown once an option is approved. Each CO is its own mini-BOM. */
@@ -1670,21 +1669,6 @@ function openLibrary(kind){
     }
   });
 }
-
-/* ================= Floating "always visible" total ================= */
-function updateMiniTotal(){
-  const el = document.getElementById('miniTotal');
-  if(!el) return;
-  const opt = state.options[state.current];
-  if(view!=='estimate' || !opt){ el.style.display='none'; return; }
-  const t = optionTotals(opt);
-  const margin = t.sub>0 ? ((t.sub-t.cost)/t.sub*100) : 0;
-  el.innerHTML = `<span class="mt-lbl">${esc(opt.name)}</span>`+
-                 `<span class="mt-val">${money(t.grand)}</span>`+
-                 `<span class="mt-margin">${margin.toFixed(1)}% margin</span>`;
-  el.style.display = 'flex';
-}
-function scrollToTotals(){ const s=document.querySelector('#pane .stamp'); if(s) s.scrollIntoView({behavior:'smooth', block:'center'}); }
 
 function addOption(){ state.options.push(blankOption("Option "+(state.options.length+1))); state.current=state.options.length-1; markDirty(); render(); }
 /* Switching the active option is not itself an undoable edit. Flush any pending
