@@ -2,6 +2,21 @@
 
 A single, fully-offline HTML app for estimating lighting jobs, tracking procurement/shipping, and issuing ship advices. The app runs by **double-clicking the built HTML file** in Edge or Chrome on Windows — no server, no internet, no install.
 
+## Download (for users)
+
+Always-latest links — these auto-update to the newest release, so you can share
+them once and they keep working:
+
+- **App (single file):** https://github.com/dbulldesign/BOM.SHIP/releases/latest/download/lighting-bom-estimator.html
+- **App + launchers (zip):** https://github.com/dbulldesign/BOM.SHIP/releases/latest/download/lighting-bom-estimator-bundle.zip
+- **All releases / notes:** https://github.com/dbulldesign/BOM.SHIP/releases/latest
+
+Download the HTML and double-click it — no install, no internet needed. When a
+newer version is published, the app shows a "Download" banner that fetches the
+latest file for you.
+
+---
+
 This repository holds the **editable source** (split into small files) plus a tiny build step that bundles everything back into one offline HTML file in `dist/`.
 
 ## How it's organized
