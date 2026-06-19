@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -562,6 +562,62 @@ function toggleColMenu(){
   if(m) m.style.display = m.style.display==='block'?'none':'block';
 }
 
+/* ================= UI state: collapse + settings ================= */
+const accExpanded = new Set();    // fixture row ids whose accessories are shown (default: hidden)
+const secCollapsed = new Set();   // section divider ids that are collapsed
+function toggleAcc(rowId){ if(accExpanded.has(rowId)) accExpanded.delete(rowId); else accExpanded.add(rowId); render(); }
+function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); else secCollapsed.add(id); render(); }
+
+/* Global display settings (local to this browser). */
+const SETTINGS_KEY = 'lbom_settings_v1';
+let uiSettings = loadSettings();
+function loadSettings(){ try{ return Object.assign({colText:'fit'}, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {colText:'fit'}; } }
+function saveSettings(){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(uiSettings)); }catch(e){} }
+function applySettings(){
+  document.body.classList.toggle('coltext-wrap', uiSettings.colText==='wrap');
+  document.body.classList.toggle('coltext-fit', uiSettings.colText!=='wrap');
+}
+function setColText(mode){ uiSettings.colText = (mode==='wrap'?'wrap':'fit'); saveSettings(); applySettings(); render(); }
+function openSettings(){
+  const checked = m => uiSettings.colText===m ? 'checked' : '';
+  const body = `
+    <p class="paste-help">How should long text in the <b>Part No.</b>, <b>Description</b>, <b>Price source</b> and <b>Notes</b> columns be shown?</p>
+    <label class="set-opt"><input type="radio" name="colText" ${checked('fit')} onchange="setColText('fit')">
+      <span><b>Auto-fit to text</b><br><span class="set-sub">Fields grow to fit their content; empty cells stay compact.</span></span></label>
+    <label class="set-opt"><input type="radio" name="colText" ${checked('wrap')} onchange="setColText('wrap')">
+      <span><b>Wrap text</b><br><span class="set-sub">Long text wraps onto multiple lines within the column.</span></span></label>`;
+  openModal({ title:'Settings', bodyHTML:body, wide:false });
+}
+
+/* Renders a text cell as an <input> (auto-fit) or auto-growing <textarea> (wrap),
+   depending on the current setting. Used for the long free-text columns. */
+function txtField(value, da, field, ph, opt){
+  opt = opt || {};
+  const cls = ('txt ' + (opt.cls||'')).trim();
+  const list  = opt.list  ? ` list="${opt.list}"`   : '';
+  const style = opt.style ? ` style="${opt.style}"` : '';
+  const title = opt.title ? ` title="${esc(opt.title)}"` : '';
+  if(uiSettings.colText==='wrap'){
+    return `<textarea class="${cls}" rows="1" placeholder="${ph}"${style}${title} ${da} data-f="${field}">${esc(value)}</textarea>`;
+  }
+  return `<input class="${cls}" value="${esc(value)}" placeholder="${ph}"${list}${style}${title} ${da} data-f="${field}">`;
+}
+
+/* Sort a list of {r,i} entries by the active sort column (keeps original indices). */
+function sortEntries(entries, sc, defMarkup){
+  if(!sc || !sc.col) return entries;
+  const NUM = new Set(['qty','unitCost','mfrMult','markup','unitSell','extCost','extSell']);
+  return entries.map(e=>{
+    const calc = rowCalc(e.r, defMarkup);
+    const aug = {...e.r, unitSell:calc.unitSell, extCost:calc.extCost, extSell:calc.extSell};
+    return {r:e.r, i:e.i, val:aug[sc.col]};
+  }).sort((a,b)=>{
+    const av = a.val ?? (NUM.has(sc.col)?0:""), bv = b.val ?? (NUM.has(sc.col)?0:"");
+    if(NUM.has(sc.col)) return (av-bv)*sc.dir;
+    return String(av).localeCompare(String(bv))*sc.dir;
+  });
+}
+
 /* Dim rows that don't match the find box; highlight those that do. Works on the
    live DOM so it doesn't disturb editing or re-render. */
 function applyBomFilter(){
@@ -694,11 +750,12 @@ function markupDisplay(pct){ return pct2x(pct); }
 function sectionTable(kind, rows, defMarkup, label, tickClass){
   const tot = sectionTotals(rows, defMarkup);
   const hasSections = rows.some(r=>r.isSection);
-  const sc = hasSections ? {col:null,dir:1} : (sortCols[getSortKey(kind)] || {col:null, dir:1});
+  /* Sorting now works in both modes — when sectioned, rows are sorted within
+     each section (dividers stay put). */
+  const sc = sortCols[getSortKey(kind)] || {col:null, dir:1};
   const allowAccessories = (kind==='fixtures');   // accessories only on fixtures
 
   function th(col, lbl, extraClass=''){
-    if(hasSections){ return `<th class="${extraClass}">${lbl}</th>`; }   // no sort while sectioned
     const active = sc.col === col;
     const icon = active ? (sc.dir===1 ? '▲' : '▼') : '⇅';
     const cls = `sortable${active ? (sc.dir===1?' sort-asc':' sort-desc') : ''}${extraClass?' '+extraClass:''}`;
@@ -727,16 +784,16 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
       <td style="width:120px"><input list="memMfr" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
-      <td style="width:130px"><input class="partno" value="${esc(r.part)}" placeholder="Part number" title="${esc(r.part)}" style="font-family:var(--mono)" ${da} data-f="part"></td>
-      <td style="min-width:170px"><input list="memDesc" value="${esc(r.desc)}" placeholder="Part description" ${da} data-f="desc"></td>
+      <td style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
+      <td style="min-width:170px" class="col-desc">${txtField(r.desc, da, 'desc', 'Part description', {list:'memDesc'})}</td>
       <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>
       <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(r)}" placeholder="1" title="Manufacturer multiplier (scales unit cost)" ${da} data-f="mfrMult"></td>
       ${mkCell(r.markup, da, 'col-markup')}
       <td class="calc" style="width:88px">${money(c.unitSell)}</td>
       <td class="calc" style="width:96px">${money(c.extCost)}</td>
       <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
-      <td class="col-source" style="width:130px"><input value="${esc(r.source??'')}" placeholder="Price source / date" ${da} data-f="source"></td>
-      <td class="col-notes" style="width:150px"><input value="${esc(r.note??'')}" placeholder="Notes" ${da} data-f="note"></td>
+      <td class="col-source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
+      <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
       <td style="width:74px" class="no-print row-actions">
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
@@ -747,6 +804,12 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
   function accessoryRowsHTML(r, i){
     if(!allowAccessories) return "";
     const accs = r.accessories||[];
+    const open = accExpanded.has(r.id);
+    /* Collapsed by default to keep the BOM clean: show a single compact toggle. */
+    const toggleRow = `<tr class="acc-toggle-row no-print"><td colspan="${NCOLS}">
+      <button class="acc-collapse-btn" onclick="toggleAcc('${r.id}')">${open?'▾':'▸'} ${accs.length? accs.length+' accessor'+(accs.length===1?'y':'ies') : 'Add accessory'}</button>
+    </td></tr>`;
+    if(!open) return toggleRow;
     const accHTML = accs.map((a,ai)=>{
       const ac = accCalc(a, r, defMarkup);
       const da = `data-k="${kind}" data-i="${i}" data-ai="${ai}"`;
@@ -757,16 +820,16 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         <td style="width:78px"><span class="acc-pill">Acc</span></td>
         <td class="col-tag" style="width:118px"></td>
         <td style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
-        <td style="width:130px"><input class="partno" value="${esc(a.part)}" placeholder="Part number" title="${esc(a.part)}" style="font-family:var(--mono)" ${da} data-f="accpart"></td>
-        <td style="min-width:170px"><span class="acc-tag"><input list="memDesc" value="${esc(a.desc)}" placeholder="Accessory (louver, lens, filter…)" ${da} data-f="accdesc"></span></td>
+        <td style="width:130px" class="col-part">${txtField(a.part, da, 'accpart', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:a.part})}</td>
+        <td style="min-width:170px" class="col-desc"><span class="acc-tag">${txtField(a.desc, da, 'accdesc', 'Accessory (louver, lens, filter…)', {list:'memDesc'})}</span></td>
         <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(a.unitCost)}" ${da} data-f="accunitCost"></td>
         <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(a)}" placeholder="1" title="Manufacturer multiplier" ${da} data-f="accmfrMult"></td>
         <td class="col-markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
         <td class="calc" style="width:88px">${money(ac.unitSell)}</td>
         <td class="calc" style="width:96px">${money(ac.extCost)}</td>
         <td class="calc sell" style="width:104px">${money(ac.extSell)}</td>
-        <td class="col-source" style="width:130px"><input value="${esc(a.source??'')}" placeholder="Price source" ${da} data-f="accsource"></td>
-        <td class="col-notes" style="width:150px"><input value="${esc(a.note??'')}" placeholder="Notes" ${da} data-f="accnote"></td>
+        <td class="col-source" style="width:130px">${txtField(a.source||'', da, 'accsource', 'Price source', {})}</td>
+        <td class="col-notes" style="width:150px">${txtField(a.note||'', da, 'accnote', 'Notes', {})}</td>
         <td style="width:30px" class="no-print"><button class="rowdel" title="Delete accessory" onclick="delAccessory('${kind}',${i},${ai})">✕</button></td>
       </tr>`;
     }).join("");
@@ -777,11 +840,13 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
           ${ACCESSORY_PRESETS.map((p,pi)=>`<button onclick="addAccessory('${kind}',${i},${pi})">${esc(p.label)}</button>`).join('')}
         </span>
       </span></td></tr>`;
-    return accHTML + addRowHTML;
+    return toggleRow + accHTML + addRowHTML;
   }
   function sectionRowHTML(r, i, secTot){
+    const collapsed = secCollapsed.has(r.id);
     return `<tr class="section-row"><td colspan="${NCOLS}"><div class="section-cell">
-      <span class="sx">▸ SECTION</span>
+      <button class="sec-toggle no-print" title="${collapsed?'Expand':'Collapse'} section" onclick="toggleSection('${r.id}')">${collapsed?'▸':'▾'}</button>
+      <span class="sx">SECTION</span>
       <input value="${esc(r.name)}" placeholder="Section name" data-k="${kind}" data-i="${i}" data-f="sectionname">
       <span class="section-sub">Cost ${money(secTot.cost)} · Sell <b>${money(secTot.sell)}</b></span>
       <button class="rowdel no-print" title="Delete section divider" onclick="delRow('${kind}',${i})">✕</button>
@@ -804,17 +869,26 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
   let body;
   if(hasSections){
     const parts = [];
-    let curSec = null;
+    let secIdx = null, secId = null, secCol = false, buf = [];
+    const flush = ()=>{
+      if(secIdx === null){                 // rows before the first section
+        sortEntries(buf, sc, defMarkup).forEach(({r,i})=> parts.push(fixtureRowHTML(r,i)+accessoryRowsHTML(r,i)));
+      } else if(!secCol){
+        sortEntries(buf, sc, defMarkup).forEach(({r,i})=> parts.push(fixtureRowHTML(r,i)+accessoryRowsHTML(r,i)));
+        parts.push(addBtnRow(secIdx));
+      }
+      buf = [];
+    };
     rows.forEach((r,i)=>{
       if(r.isSection){
-        if(curSec!==null) parts.push(addBtnRow(curSec));   // close out the previous section
-        curSec = i;
+        flush();
+        secIdx = i; secId = r.id; secCol = secCollapsed.has(r.id);
         parts.push(sectionRowHTML(r, i, sectionSubtotalAt(i)));
       } else {
-        parts.push(fixtureRowHTML(r,i) + accessoryRowsHTML(r,i));
+        buf.push({r,i});
       }
     });
-    if(curSec!==null) parts.push(addBtnRow(curSec));        // close the last section
+    flush();
     body = parts.join("");
   } else {
     const sorted = sortedRows(rows, kind);
@@ -1370,7 +1444,7 @@ function renderCompare(){
 /* ================= Event binding (delegated per render) ================= */
 function bindPane(){
   const pane = document.getElementById("pane");
-  pane.querySelectorAll("input[data-k], select[data-k]").forEach(inp=>{
+  pane.querySelectorAll("input[data-k], select[data-k], textarea[data-k]").forEach(inp=>{
     inp.addEventListener("change", e=>{
       const {k,i,f,ai} = e.target.dataset;
       /* base lock: if this option is approved & locked, confirm before editing base lines */
@@ -1417,6 +1491,7 @@ function bindPane(){
     inp.addEventListener("focus", e=>{ e.target._focusVal = e.target.value; });
     inp.addEventListener("keydown", e=>{
       if(e.key==="Enter"){
+        if(e.target.tagName==="TEXTAREA"){ if(e.shiftKey) return; e.preventDefault(); }   // keep wrap fields single-logical-line
         const {k,i,ai} = e.target.dataset;
         const arr = state.options[state.current][k];
         if(ai===undefined && parseInt(i)===arr.length-1 && !arr[i].isSection){ e.target.blur(); addRow(k); }
@@ -1540,6 +1615,7 @@ function addAccessory(kind, i, presetIdx){
   const row = state.options[state.current][kind][i];
   if(!row.accessories) row.accessories = [];
   row.accessories.push(blankAccessory(ACCESSORY_PRESETS[presetIdx]));
+  accExpanded.add(row.id);   // keep the accessory group open after adding
   closeAccMenus(); markDirty(); render();
 }
 function delAccessory(kind, i, ai){
@@ -3336,5 +3412,6 @@ window.addEventListener("keydown", e=>{
 render();
 updateSaveStamp();
 applyColVis();
+applySettings();
 resetHistory();
 document.addEventListener('click', ()=>{ const m=document.getElementById('colMenu'); if(m) m.style.display='none'; });

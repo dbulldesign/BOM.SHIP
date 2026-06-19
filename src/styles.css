@@ -467,25 +467,16 @@
   td input::placeholder{color:#B5B2A6}
   input.up{text-transform:uppercase}
   tr.sec-add-row td{background:transparent!important;border-bottom:1px solid var(--rule)}
-  /* Part-number field: contracts to its column, expands to reveal the full value on
-     hover/focus by overflowing neighbors to the right (cells are overflow:visible). */
-  td input.partno{transition:width .12s ease, box-shadow .12s ease}
-  td input.partno:hover,
-  td input.partno:focus{position:relative;z-index:6;width:300px;max-width:480px;min-width:130px;
-    field-sizing:content;background:var(--sheet);box-shadow:0 2px 10px rgba(20,24,32,.18);border-radius:2px}
-  td input.partno:focus{background:var(--amber-wash)}
-  body.dark td input.partno:hover,body.dark td input.partno:focus{background:var(--sheet)}
-  body.dark td input.partno:focus{background:#2A2310}
-  /* Notes & Price Source: same expand-on-hover/focus reveal as Part No. */
-  td.col-notes input, td.col-source input{transition:width .12s ease, box-shadow .12s ease}
-  td.col-notes input:hover, td.col-notes input:focus,
-  td.col-source input:hover, td.col-source input:focus{position:relative;z-index:6;width:280px;
-    max-width:420px;min-width:130px;field-sizing:content;background:var(--sheet);
-    box-shadow:0 2px 10px rgba(20,24,32,.18);border-radius:2px}
-  td.col-notes input:focus, td.col-source input:focus{background:var(--amber-wash)}
-  body.dark td.col-notes input:hover,body.dark td.col-source input:hover,
-  body.dark td.col-notes input:focus,body.dark td.col-source input:focus{background:var(--sheet)}
-  body.dark td.col-notes input:focus,body.dark td.col-source input:focus{background:#2A2310}
+  /* Long free-text columns (Part No., Description, Price source, Notes). Display
+     controlled by Settings: auto-fit (grow to content) or wrap (multi-line). */
+  td input.txt, td textarea.txt{width:100%;border:none;background:transparent;font:inherit;
+    color:var(--ink);padding:7px 8px;font-size:.84rem}
+  td textarea.txt{resize:none;white-space:pre-wrap;overflow:hidden;line-height:1.35;
+    field-sizing:content;min-height:1.2em;font-family:var(--ui)}
+  td input.txt.partno, td textarea.txt.partno{font-family:var(--mono)}
+  body.coltext-fit td input.txt{field-sizing:content;min-width:70px;max-width:520px}
+  td .txt:focus{outline:none;background:var(--amber-wash)}
+  body.dark td .txt:focus{background:#2A2310}
   .rowdel{border:none;background:none;color:#C0BCAE;font-size:1rem;padding:4px 8px;line-height:1}
   .rowdel:hover{color:var(--danger);background:none}
 
@@ -773,3 +764,28 @@
   .lib-meta{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);white-space:nowrap}
   .lib-empty{padding:22px;text-align:center;color:var(--ink-soft);font-size:.84rem}
   .lib-item .ghost{font-size:.74rem;padding:4px 10px}
+
+  /* ===== Phase 3: collapse toggles, settings, tag input ===== */
+  .tag-input{width:100%;border:none;background:transparent;font:inherit;font-size:.82rem;color:var(--ink);padding:7px 8px}
+  .tag-input:focus{outline:none;background:var(--amber-wash)}
+  body.dark .tag-input:focus{background:#2A2310}
+
+  /* per-fixture accessory collapse */
+  tr.acc-toggle-row td{background:#FAFAF7;border-bottom:1px dotted var(--rule);padding:2px 8px!important}
+  body.dark tr.acc-toggle-row td{background:#1C1F28}
+  .acc-collapse-btn{border:none;background:transparent;color:var(--ink-soft);font-size:.72rem;
+    font-weight:600;cursor:pointer;padding:3px 6px 3px 22px;letter-spacing:.02em}
+  .acc-collapse-btn:hover{color:var(--amber-deep)}
+
+  /* section collapse chevron */
+  .sec-toggle{border:none;background:transparent;color:var(--amber-deep);font-size:.8rem;
+    cursor:pointer;padding:0 4px;line-height:1}
+  .sec-toggle:hover{color:var(--ink)}
+
+  /* settings modal options */
+  .set-opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--rule-dark);
+    border-radius:4px;margin-bottom:10px;cursor:pointer;font-size:.86rem;color:var(--ink)}
+  .set-opt:hover{border-color:var(--amber-deep);background:var(--amber-wash)}
+  body.dark .set-opt:hover{background:#2A2310}
+  .set-opt input{margin-top:3px}
+  .set-sub{color:var(--ink-soft);font-size:.78rem;font-weight:400}
