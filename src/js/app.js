@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.26.0";
+const APP_VERSION = "1.27.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -137,7 +137,7 @@ document.addEventListener('keydown', e => {
 let _idSeed = Date.now();
 function uid(){ return 'id' + (_idSeed++).toString(36); }
 
-function blankRow(){ return {id:uid(), qty:1, type:"", mfr:"", desc:"", part:"", unitCost:0, mfrMult:1, markup:null, note:"", source:"", tag:"", accessories:[], pieces:[]}; }
+function blankRow(){ return {id:uid(), qty:0, type:"", mfr:"", desc:"", part:"", unitCost:0, mfrMult:1, markup:null, note:"", source:"", tag:"", accessories:[], pieces:[]}; }
 const FIXTURE_TAGS = ["", "Downlight", "LED Linear", "Track Lighting", "Driver", "Power Supply", "Transformer"];
 function blankAccessory(preset){
   preset = preset || {};
@@ -3142,34 +3142,61 @@ function renderShipping(){
       <button class="primary" onclick="assignSelectedTo(document.getElementById('assignSelect').value)">Assign to invoice</button>
       <button onclick="addInvoice()">+ New invoice</button>
       <span class="ib-divider"></span>
-      <span class="ib-bulk-label">Bulk fill:</span>
-      <select id="bulkField">
-        <option value="po">PO #</option>
-        <option value="orderDate">Order date</option>
-        <option value="estShip">Est. ship</option>
-        <option value="shipDate">Shipped date</option>
-        <option value="delivery">Delivery date</option>
-        <option value="shipper">Shipper</option>
-        <option value="tracking">Tracking #</option>
-        <option value="comments">Comments</option>
-      </select>
-      <input id="bulkValue" class="ib-bulk-input" placeholder="value…">
-      <button onclick="bulkFillSelected()">Apply to ${selCount||'…'}</button>
-      <button onclick="bulkBackorderSelected()">Mark back-ordered</button>
+      <button class="primary" onclick="openShipBulkEdit()" title="Set several fields at once on the selected rows">✎ Bulk edit fields…</button>
+      <button onclick="bulkBackorderSelected()">Toggle back-ordered</button>
       ${selCount?`<button onclick="toggleAllSel(false,[])">Clear selection</button>`:''}
     </div>`;
 
   el.innerHTML = dashboard + filterBar + table + assignBar + invoicesPanel() + shipSummary();
 }
 
-/* Bulk fill: apply a field value to every selected item line */
-function bulkFillSelected(){
-  const field = document.getElementById('bulkField').value;
-  const val = document.getElementById('bulkValue').value;
-  if(shipSel.size===0){ toast('Select some rows first'); return; }
-  shipSel.forEach(id=>{ getMeta(id)[field] = val; });
-  markDirty(); renderShipping();
-  toast(`Set ${field} on ${shipSel.size} item(s)`);
+/* Bulk edit: set several procurement/shipping fields at once on every selected
+   item line. Only the fields whose "set" box is checked are written. */
+function openShipBulkEdit(){
+  if(shipSel.size===0){ toast('Select some rows first (checkboxes)'); return; }
+  const n = shipSel.size;
+  const fieldRows = SHIP_FIELDS.map(f=>`
+    <label class="sbe-row">
+      <input type="checkbox" class="sbe-on" data-f="${f.k}">
+      <span class="sbe-label">${esc(f.label)}</span>
+      <input class="sbe-val" data-f="${f.k}" placeholder="${f.type==='date'?'mm/dd/yyyy':'value…'}">
+    </label>`).join('');
+  const body = `<p class="paste-help">Set one or more fields on the <b>${n}</b> selected item${n===1?'':'s'}. Only the fields you check are changed. Leave a value blank (with its box checked) to clear that field.</p>
+    <div class="sbe-grid">${fieldRows}
+      <label class="sbe-row">
+        <input type="checkbox" class="sbe-on" data-f="backordered">
+        <span class="sbe-label">Back-ordered</span>
+        <select class="sbe-val" data-f="backordered"><option value="1">Mark back-ordered</option><option value="0">Clear back-ordered</option></select>
+      </label>
+    </div>`;
+  openModal({
+    title:'Bulk edit selected items', bodyHTML:body, wide:true,
+    confirmLabel:'Apply', cancelLabel:'Cancel',
+    onOpen(back){
+      /* checking the value field auto-ticks its "set" box for convenience */
+      back.querySelectorAll('.sbe-val').forEach(v=>{
+        const on = back.querySelector('.sbe-on[data-f="'+v.dataset.f+'"]');
+        v.addEventListener('input', ()=>{ if(on) on.checked = true; });
+        v.addEventListener('change', ()=>{ if(on) on.checked = true; });
+      });
+    },
+    onConfirm(back){
+      const sets = [];
+      back.querySelectorAll('.sbe-on').forEach(cb=>{
+        if(!cb.checked) return;
+        const f = cb.dataset.f;
+        const valEl = back.querySelector('.sbe-val[data-f="'+f+'"]');
+        sets.push([f, valEl ? valEl.value : '']);
+      });
+      if(!sets.length){ toast('Check at least one field to set'); return; }
+      shipSel.forEach(id=>{
+        const m = getMeta(id);
+        sets.forEach(([f,v])=>{ if(f==='backordered') m.backordered = (v==='1'); else m[f] = v; });
+      });
+      markDirty(); closeModal(); renderShipping();
+      toast(`Updated ${sets.length} field${sets.length===1?'':'s'} on ${n} item${n===1?'':'s'}`);
+    }
+  });
 }
 function bulkBackorderSelected(){
   if(shipSel.size===0){ toast('Select some rows first'); return; }
@@ -4455,11 +4482,66 @@ function _afterPrintRestore(){ if(_printWasDark){ document.body.classList.add('d
 window.addEventListener('beforeprint', _beforePrintLight);
 window.addEventListener('afterprint', _afterPrintRestore);
 
+/* ================= Hosted-PWA update flow =================
+ * When a new version is downloaded (hosted GitHub Pages app), the service-worker
+ * bootstrap calls window.onUpdateReady(worker). Rather than reloading out from
+ * under the user, we show a banner asking them to save; applying the update
+ * stashes the in-progress project and reloads, then restores it. (Harmless in
+ * the offline file — onUpdateReady is simply never called there.) */
+const UPDATE_RESTORE_KEY = 'lbom_update_restore_v1';
+let _pendingUpdateWorker = null;
+function onUpdateReady(worker){ _pendingUpdateWorker = worker || null; showUpdateBanner(); }
+function showUpdateBanner(){
+  if(document.getElementById('updateBanner')) return;
+  const bar = document.createElement('div');
+  bar.id = 'updateBanner'; bar.className = 'update-banner no-print';
+  bar.innerHTML =
+    `<span class="ub-msg">⬆ A new version is available. <b>Save your work</b>, then update — your current project will be carried over.</span>
+     <span class="ub-actions">
+       <button class="ub-save" onclick="saveProject()">Save</button>
+       <button class="ub-update" onclick="applyUpdateNow()">Update &amp; reload</button>
+       <button class="ub-later" onclick="dismissUpdateBanner()" title="Dismiss for now">Later</button>
+     </span>`;
+  document.body.appendChild(bar);
+  document.body.classList.add('has-update-banner');
+}
+function dismissUpdateBanner(){
+  const b = document.getElementById('updateBanner'); if(b) b.remove();
+  document.body.classList.remove('has-update-banner');
+}
+function saveUpdateRestore(){
+  try{ localStorage.setItem(UPDATE_RESTORE_KEY, JSON.stringify({ ts:Date.now(), name:state.name||'', json:projectJSON() })); }catch(e){}
+}
+function applyUpdateNow(){
+  saveUpdateRestore();
+  if(_pendingUpdateWorker){
+    try{ _pendingUpdateWorker.postMessage('skipWaiting'); }catch(e){}
+    /* the SW controllerchange handler reloads; fall back in case it doesn't fire */
+    setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1500);
+  } else {
+    try{ location.reload(); }catch(e){}
+  }
+}
+function maybeRestoreAfterUpdate(){
+  let slot = null;
+  try{ slot = JSON.parse(localStorage.getItem(UPDATE_RESTORE_KEY) || 'null'); }catch(e){}
+  try{ localStorage.removeItem(UPDATE_RESTORE_KEY); }catch(e){}
+  if(!slot || !slot.json) return false;
+  try{
+    applyProject(JSON.parse(slot.json));
+    dirty = true; lastSavedAt = null;
+    render(); resetHistory(); updateSaveStamp();
+    toast('Restored your in-progress work after the update — review and Save');
+    return true;
+  }catch(e){ return false; }
+}
+
 render();
 updateSaveStamp();
 applyColVis();
 applySettings();
 resetHistory();
+maybeRestoreAfterUpdate();   // carry work across a hosted-PWA version update
 document.addEventListener('click', ()=>{ const m=document.getElementById('colMenu'); if(m) m.style.display='none'; });
 
 /* PWA file handler: when the installed app is launched by double-clicking a

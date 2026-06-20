@@ -955,3 +955,28 @@
   .adv-item-in:focus{outline:none;border-color:var(--amber);background:var(--amber-wash)}
   body.dark .adv-item-in:focus{background:#2A2310}
   .adv-items-table th{white-space:nowrap}
+
+  /* ===== Shipping bulk-edit modal ===== */
+  .sbe-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}
+  @media (max-width:560px){ .sbe-grid{grid-template-columns:1fr} }
+  .sbe-row{display:grid;grid-template-columns:auto 110px 1fr;align-items:center;gap:8px;font-size:.84rem;color:var(--ink)}
+  .sbe-label{color:var(--ink-soft);font-size:.78rem}
+  .sbe-val{font:inherit;font-size:.84rem;padding:5px 7px;border:1px solid var(--rule-dark);border-radius:3px;
+    background:var(--sheet);color:var(--ink)}
+  .sbe-val:focus{outline:none;border-color:var(--amber);background:var(--amber-wash)}
+  body.dark .sbe-val:focus{background:#2A2310}
+
+  /* ===== Hosted-PWA update banner ===== */
+  body.has-update-banner{padding-top:48px}
+  .update-banner{position:fixed;top:0;left:0;right:0;z-index:120;display:flex;align-items:center;
+    gap:14px;flex-wrap:wrap;padding:9px 16px;background:var(--amber);color:#16181F;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);font-size:.86rem}
+  .update-banner .ub-msg{flex:1 1 auto;min-width:200px}
+  .update-banner b{font-weight:800}
+  .update-banner .ub-actions{display:flex;gap:8px;flex-shrink:0}
+  .update-banner button{border:1px solid rgba(0,0,0,.25);background:rgba(255,255,255,.85);color:#16181F;
+    padding:5px 12px;border-radius:3px;font-size:.82rem;font-weight:600;cursor:pointer}
+  .update-banner button:hover{background:#fff}
+  .update-banner .ub-update{background:#16181F;color:#fff;border-color:#16181F}
+  .update-banner .ub-update:hover{background:#000;color:#fff}
+  .update-banner .ub-later{background:transparent;border-color:transparent}

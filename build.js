@@ -119,16 +119,20 @@ function buildSite(html, appJs) {
     '<meta name="theme-color" content="#14181f">\n' +
     '<link rel="icon" href="icon.svg">\n';
 
-  // Registers the service worker and reloads once when a new version activates.
+  // Registers the service worker. When a new version is waiting, it notifies the
+  // app (window.onUpdateReady) so the app can show a "save your work" banner and
+  // carry the work across the reload — instead of reloading out from under the user.
   const swScript =
     "<script>\n" +
     "if('serviceWorker' in navigator){\n" +
     "  window.addEventListener('load', function(){\n" +
+    "    function notify(w){ if(w){ if(window.onUpdateReady){ window.onUpdateReady(w); } else { w.postMessage('skipWaiting'); } } }\n" +
     "    navigator.serviceWorker.register('sw.js').then(function(reg){\n" +
+    "      if(reg.waiting && navigator.serviceWorker.controller){ notify(reg.waiting); }\n" +
     "      reg.addEventListener('updatefound', function(){\n" +
     "        var nw = reg.installing; if(!nw) return;\n" +
     "        nw.addEventListener('statechange', function(){\n" +
-    "          if(nw.state==='installed' && navigator.serviceWorker.controller){ nw.postMessage('skipWaiting'); }\n" +
+    "          if(nw.state==='installed' && navigator.serviceWorker.controller){ notify(nw); }\n" +
     "        });\n" +
     "      });\n" +
     "    }).catch(function(){});\n" +
