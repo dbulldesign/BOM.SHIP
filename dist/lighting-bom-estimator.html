@@ -827,6 +827,19 @@
   .af-num.af-ov{border-color:var(--amber-deep);background:var(--amber-wash)}
   body.dark .af-num.af-ov{background:#2A2310}
   .af-cost,.af-sell{display:inline-flex;align-items:center;gap:5px}
+
+  /* ===== Bulk edit + library import/export ===== */
+  .bom-check{margin:0 2px 0 0;vertical-align:middle;cursor:pointer}
+  .bulk-bar{position:sticky;top:0;z-index:8;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:var(--chip);color:#fff;border-radius:6px;padding:8px 14px;margin:0 0 10px;font-size:.82rem}
+  .bulk-bar b{color:#E9B45C}
+  .bulk-grp{display:inline-flex;align-items:center;gap:5px}
+  .bulk-bar input{width:70px;font:inherit;font-size:.8rem;padding:3px 6px;border:1px solid rgba(255,255,255,.25);
+    border-radius:3px;background:rgba(255,255,255,.1);color:#fff}
+  .bulk-bar input::placeholder{color:rgba(255,255,255,.5)}
+  .bulk-bar #bulkTag{width:120px}
+  .bulk-bar button{padding:3px 10px;font-size:.76rem}
+  .lib-io{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
 </style>
 </head>
 <body>
@@ -955,7 +968,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.13.0";
+const APP_VERSION = "1.14.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1541,7 +1554,7 @@ const COLW_KEY = 'lbom_colw_v1';
 let colWidths = loadColWidths();
 function loadColWidths(){ try{ const v=JSON.parse(localStorage.getItem(COLW_KEY)); return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; } }
 function saveColWidths(){ try{ localStorage.setItem(COLW_KEY, JSON.stringify(colWidths)); }catch(e){} }
-const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:120,part:130,desc:200,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:130,notes:150,actions:92};
+const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:120,part:130,desc:200,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:130,notes:150,actions:110};
 const TEXT_COLS = new Set(['part','desc','source','notes']);
 function colKeyForField(field){
   if(field==='part'||field==='accpart') return 'part';
@@ -1554,6 +1567,44 @@ function colKeyForField(field){
 /* ================= UI state: collapse + settings ================= */
 const accExpanded = new Set();    // fixture row ids whose accessories are shown (default: hidden)
 const secCollapsed = new Set();   // section divider ids that are collapsed
+const bomSel = new Set();         // selected fixture/control row ids (bulk edit)
+function toggleBomSel(id, on){ if(on) bomSel.add(id); else bomSel.delete(id); render(); }
+function selectedRows(){
+  const o = state.options[state.current]; const out = [];
+  ['fixtures','controls'].forEach(k=> (o[k]||[]).forEach(r=>{ if(!r.isSection && bomSel.has(r.id)) out.push(r); }));
+  return out;
+}
+function bulkSet(field){
+  if(!guardBaseEdit()) return;
+  const el = document.getElementById(field==='markup'?'bulkMk':field==='mfrMult'?'bulkMx':'bulkTag');
+  const raw = el? el.value : '';
+  const rows = selectedRows(); if(!rows.length) return;
+  rows.forEach(r=>{
+    if(field==='markup') r.markup = parseMarkup(raw);
+    else if(field==='mfrMult') r.mfrMult = numOr(raw,1);
+    else if(field==='tag'){ r.tag = raw; rememberTag(raw); }
+    if(r.linkId && r.linkMaster && field==='unitCost') linkMembers(r.linkId).forEach(x=>x.r.unitCost=r.unitCost);
+  });
+  markDirty(); render(); toast('Updated '+rows.length+' row'+(rows.length>1?'s':''));
+}
+function bulkDelete(){
+  if(!guardBaseEdit()) return;
+  const o = state.options[state.current];
+  ['fixtures','controls'].forEach(k=>{ o[k] = (o[k]||[]).filter(r=> r.isSection || !bomSel.has(r.id)); });
+  sanitizeLinks(o); bomSel.clear(); markDirty(); render(); toast('Deleted selected');
+}
+function bulkClear(){ bomSel.clear(); render(); }
+function bulkBar(){
+  const n = bomSel.size;
+  return `<div class="bulk-bar no-print">
+    <b>${n} selected</b>
+    <span class="bulk-grp">Markup <input id="bulkMk" class="num" inputmode="decimal" placeholder="1.5"><button class="ghost" onclick="bulkSet('markup')">Set</button></span>
+    <span class="bulk-grp">Mfr× <input id="bulkMx" class="num" inputmode="decimal" placeholder="1"><button class="ghost" onclick="bulkSet('mfrMult')">Set</button></span>
+    <span class="bulk-grp">Tag <input id="bulkTag" list="memTag" placeholder="Tag"><button class="ghost" onclick="bulkSet('tag')">Set</button></span>
+    <button class="danger" onclick="bulkDelete()">Delete</button>
+    <button class="ghost" onclick="bulkClear()">Clear</button>
+  </div>`;
+}
 function toggleAcc(rowId){ if(accExpanded.has(rowId)) accExpanded.delete(rowId); else accExpanded.add(rowId); render(); }
 function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); else secCollapsed.add(id); render(); }
 
@@ -1813,7 +1864,8 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
       <td class="col-source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
       <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
-      <td style="width:92px" class="no-print row-actions">
+      <td style="width:110px" class="no-print row-actions">
+        <input type="checkbox" class="bom-check" tabindex="-1" title="Select for bulk edit" ${bomSel.has(r.id)?'checked':''} onclick="toggleBomSel('${r.id}', this.checked)">
         <span class="drag-grip" draggable="true" title="Drag to move row">⠿</span>
         ${linkBtn}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
@@ -2130,6 +2182,7 @@ function renderPane(){
         <button class="danger" onclick="delOption()">Delete option</button>
       </div>
     </div>
+    ${bomSel.size ? bulkBar() : ''}
     ${sectionTable("fixtures", opt.fixtures, opt.fixtureMarkup, "Light fixtures", "")}
     ${sectionTable("controls", opt.controls, opt.controlMarkup, "Lighting controls", "ctl")}
     ${servicesTable(opt)}
@@ -3028,7 +3081,12 @@ function openLibrary(kind){
       </div>`).join('')}</div>`;
   };
   const body = `<input class="lib-search" id="libSearch" placeholder="Search saved ${label}…" autocomplete="off">
-    <div id="libListWrap">${listHTML()}</div>`;
+    <div id="libListWrap">${listHTML()}</div>
+    <div class="lib-io no-print">
+      <button class="ghost" id="libExport">⬇ Export library</button>
+      <button class="ghost" id="libImport">⬆ Import…</button>
+      <input type="file" id="libImportFile" accept=".json" style="display:none">
+    </div>`;
   openModal({
     title:label.charAt(0).toUpperCase()+label.slice(1)+' library', bodyHTML:body, wide:true,
     onOpen(back){
@@ -3039,9 +3097,44 @@ function openLibrary(kind){
         wrap.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{ deletePart(kind, b.dataset.del); wrap.innerHTML = listHTML(search.value); bind(); }));
       };
       search.addEventListener('input', ()=>{ wrap.innerHTML = listHTML(search.value); bind(); });
+      back.querySelector('#libExport').addEventListener('click', ()=> exportLibrary(kind));
+      const imp = back.querySelector('#libImportFile');
+      back.querySelector('#libImport').addEventListener('click', ()=> imp.click());
+      imp.addEventListener('change', e=>{
+        const f=e.target.files[0]; if(!f) return;
+        const rd=new FileReader(); rd.onload=()=>{ importLibrary(kind, rd.result); wrap.innerHTML=listHTML(search.value); bind(); };
+        rd.readAsText(f); e.target.value='';
+      });
       bind(); search.focus();
     }
   });
+}
+function downloadJSON(name, obj){
+  const blob = new Blob([JSON.stringify(obj,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  URL.revokeObjectURL(a.href);
+}
+function exportLibrary(kind){
+  const parts = loadParts(kind);
+  if(!parts.length){ toast('That library is empty'); return; }
+  downloadJSON('lighting-'+kind+'-library.json', {app:'lbom-library', kind, parts});
+  toast('Exported '+parts.length+' '+kind);
+}
+function importLibrary(kind, text){
+  try{
+    const d = JSON.parse(text);
+    const incoming = Array.isArray(d) ? d : (Array.isArray(d.parts) ? d.parts : []);
+    if(!incoming.length){ toast('No parts found in that file'); return; }
+    const arr = loadParts(kind); let added=0;
+    incoming.forEach(p=>{
+      if(!p || typeof p!=='object') return;
+      const np = { id:uid(), type:String(p.type||''), mfr:String(p.mfr||''), desc:String(p.desc||''), part:String(p.part||''),
+        unitCost:numOr(p.unitCost,0), markup:(p.markup==null?null:numOr(p.markup,0)), tag:String(p.tag||'') };
+      if(!(np.type||np.desc||np.part)) return;
+      if(!arr.some(x=>x.part===np.part && x.desc===np.desc && x.type===np.type)){ arr.unshift(np); added++; }
+    });
+    savePartsArr(kind, arr); toast('Imported '+added+' part'+(added===1?'':'s'));
+  }catch(e){ toast('Could not read that library file'); }
 }
 
 function addOption(){ state.options.push(blankOption("Option "+(state.options.length+1))); state.current=state.options.length-1; markDirty(); render(); }
