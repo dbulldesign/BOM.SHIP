@@ -987,3 +987,36 @@
   .modal-body .upd-note{display:block;color:var(--ink-soft);font-size:.78rem;margin-top:6px;line-height:1.45}
   .modal-body .upd-note a{color:var(--amber-deep);font-weight:600}
   body.dark .modal-body .upd-note a{color:var(--amber)}
+
+  /* ===== Phase A: display settings (density, text size, sticky) ===== */
+  /* Text size — scale the three main view areas (content, not chrome). */
+  #estimateView,#shippingView,#adviceView{zoom:var(--ui-scale,1)}
+
+  /* Compact density — tighter table rows + inputs */
+  body.density-compact td input,
+  body.density-compact td select,
+  body.density-compact td textarea{padding-top:1px;padding-bottom:1px}
+  body.density-compact table td,
+  body.density-compact table th{padding-top:2px;padding-bottom:2px}
+  body.density-compact .ship-table td,
+  body.density-compact .ship-table th{padding-top:3px;padding-bottom:3px}
+  body.density-compact .acc-row td{padding-top:0;padding-bottom:0}
+
+  /* Sticky table headers + sticky grand-total row (toggle) */
+  body.sticky-head .table-scroll{position:relative}
+  body.sticky-head .section thead th,
+  body.sticky-head .ship-table thead th{position:sticky;top:0;z-index:4}
+  body.sticky-head .stamp{position:sticky;bottom:0;z-index:3;
+    box-shadow:0 -6px 14px -8px rgba(0,0,0,.25)}
+  body.dark.sticky-head .stamp{box-shadow:0 -6px 14px -8px rgba(0,0,0,.6)}
+  @media print{ body.sticky-head .section thead th,
+    body.sticky-head .ship-table thead th,
+    body.sticky-head .stamp{position:static;box-shadow:none} }
+
+  /* Segmented control (settings) */
+  .seg{display:inline-flex;margin-top:6px;border:1px solid var(--rule-dark);border-radius:5px;overflow:hidden}
+  .seg-btn{border:none;background:var(--sheet);color:var(--ink);padding:5px 14px;font-size:.82rem;cursor:pointer;border-radius:0}
+  .seg-btn + .seg-btn{border-left:1px solid var(--rule-dark)}
+  .seg-btn.on{background:var(--amber);color:#16181F;font-weight:600}
+  .seg-btn:hover:not(.on){background:var(--amber-wash)}
+  body.dark .seg-btn:hover:not(.on){background:#2A2310}
