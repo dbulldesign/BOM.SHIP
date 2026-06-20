@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.19.0";
+const APP_VERSION = "1.20.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -171,6 +171,16 @@ const SERVICE_UNITS_BASE  = ["Trips","Days","Lump Sum"];          // Supplier & 
 const SERVICE_UNITS_NINJA = ["Trips","Days","Hours","Lump Sum"];  // Ninja / Design keeps Hours
 const SERVICE_LOCATIONS = ["In Office","On Site","—"];
 function serviceUnits(type){ return type==='ninja' ? SERVICE_UNITS_NINJA : SERVICE_UNITS_BASE; }
+
+/* Common architectural lighting-control manufacturers — used to power the
+   type-ahead list on Controls rows. Free typing still works (it's a datalist),
+   and any manufacturer the user types is remembered per-project too. */
+const CONTROL_MFRS = [
+  "ETC","Lutron","Pharos","Nicolaudi","Philips Dynalite","Color Kinetics","Crestron",
+  "Wattstopper","Acuity Controls","nLight","Sensor Switch","Leviton","Cooper Controls",
+  "Greengate","iLight","Douglas Lighting Controls","Vantage","Helvar","eldoLED","Casambi",
+  "Pathway Connectivity","ENTTEC","Mode Lighting","Encelium","Zumtobel","Bublinet","Echoflex"
+];
 
 /* Accessory-style add-on presets, by the unit they attach to (all priced as DK est). */
 const TRIP_ADDONS = [
@@ -472,7 +482,11 @@ function tagOptions(){
 function memoryDatalists(){
   const opts = arr => (arr||[]).map(v=>`<option value="${esc(v)}"></option>`).join('');
   const m = ensureMemory();
+  /* Controls manufacturers = curated control brands + any remembered ones (de-duped). */
+  const ctrlSeen = new Set(); const ctrlList = [];
+  CONTROL_MFRS.concat(m.mfr||[]).forEach(v=>{ const k=String(v).toLowerCase(); if(v && !ctrlSeen.has(k)){ ctrlSeen.add(k); ctrlList.push(v); } });
   return `<datalist id="memMfr">${opts(m.mfr)}</datalist>`+
+         `<datalist id="ctrlMfr">${opts(ctrlList)}</datalist>`+
          `<datalist id="memDesc">${opts(m.desc)}</datalist>`+
          `<datalist id="memType">${opts(m.type)}</datalist>`+
          `<datalist id="memTag">${opts(tagOptions())}</datalist>`;
@@ -674,6 +688,33 @@ function optionIssueCount(opt){
   return n;
 }
 function toggleBomSel(id, on){ if(on) bomSel.add(id); else bomSel.delete(id); render(); }
+let _lastBomClickId = null;   // anchor for Shift-click range selection
+/* Checkbox click with modifier support: Shift-click selects the range from the
+   last clicked checkbox (in visual order) to this one; plain/Ctrl-click toggles. */
+function bomCheckClick(ev, kind, id){
+  const box = ev.target;
+  const want = box.checked;     // browser already toggled the box on click
+  if(ev.shiftKey && _lastBomClickId){
+    /* gather row ids in DOM (visual) order within this same table */
+    const table = box.closest && box.closest('table');
+    const ids = table ? Array.prototype.map.call(table.querySelectorAll('.bom-check[data-id]'), b=>b.dataset.id) : [id];
+    const a = ids.indexOf(_lastBomClickId), b = ids.indexOf(id);
+    if(a!==-1 && b!==-1){
+      const [lo,hi] = a<b ? [a,b] : [b,a];
+      for(let k=lo;k<=hi;k++){ if(want) bomSel.add(ids[k]); else bomSel.delete(ids[k]); }
+    } else { want ? bomSel.add(id) : bomSel.delete(id); }
+  } else {
+    want ? bomSel.add(id) : bomSel.delete(id);
+  }
+  _lastBomClickId = id;
+  render();
+}
+/* Header checkbox: select or clear every row in this table (fixtures or controls). */
+function toggleSelectAll(kind, on){
+  const o = state.options[state.current];
+  (o[kind]||[]).forEach(r=>{ if(!r.isSection){ on ? bomSel.add(r.id) : bomSel.delete(r.id); } });
+  render();
+}
 function selectedRows(){
   const o = state.options[state.current]; const out = [];
   ['fixtures','controls'].forEach(k=> (o[k]||[]).forEach(r=>{ if(!r.isSection && bomSel.has(r.id)) out.push(r); }));
@@ -716,13 +757,14 @@ function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); el
 /* Global display settings (local to this browser). */
 const SETTINGS_KEY = 'lbom_settings_v1';
 let uiSettings = loadSettings();
-function loadSettings(){ try{ return Object.assign({colText:'fit'}, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {colText:'fit'}; } }
+function loadSettings(){ try{ return Object.assign({colText:'fit', showSelect:true}, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {colText:'fit', showSelect:true}; } }
 function saveSettings(){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(uiSettings)); }catch(e){} }
 function applySettings(){
   document.body.classList.toggle('coltext-wrap', uiSettings.colText==='wrap');
   document.body.classList.toggle('coltext-fit', uiSettings.colText!=='wrap');
 }
 function setColText(mode){ uiSettings.colText = (mode==='wrap'?'wrap':'fit'); saveSettings(); applySettings(); render(); }
+function setShowSelect(on){ uiSettings.showSelect = !!on; saveSettings(); render(); }
 function openSettings(){
   const original = uiSettings.colText;                 // remembered so Cancel can revert
   const checked = m => uiSettings.colText===m ? 'checked' : '';
@@ -731,7 +773,10 @@ function openSettings(){
     <label class="set-opt"><input type="radio" name="colText" value="fit" ${checked('fit')}>
       <span><b>Auto-fit to text</b><br><span class="set-sub">Fields grow to fit their content; empty cells stay compact.</span></span></label>
     <label class="set-opt"><input type="radio" name="colText" value="wrap" ${checked('wrap')}>
-      <span><b>Wrap text</b><br><span class="set-sub">Long text wraps onto multiple lines within the column.</span></span></label>`;
+      <span><b>Wrap text</b><br><span class="set-sub">Long text wraps onto multiple lines within the column.</span></span></label>
+    <hr class="set-div">
+    <label class="set-opt"><input type="checkbox" id="setShowSelect" ${uiSettings.showSelect?'checked':''}>
+      <span><b>Show selection checkboxes</b><br><span class="set-sub">A checkbox column on the left of each table for selecting rows to bulk-edit. Tip: <b>Shift-click</b> a checkbox to select a range.</span></span></label>`;
   openModal({
     title:'Settings', bodyHTML:body, wide:false,
     cancelLabel:'Close', confirmLabel:'Accept',
@@ -741,13 +786,12 @@ function openSettings(){
       const ok = back.querySelector('[data-mok]');
       const cancel = back.querySelector('[data-mclose]');
       if(ok) ok.style.display = 'none';                 // nothing to accept until a change
+      const dirtyUI = ()=>{ if(ok) ok.style.display=''; if(cancel) cancel.textContent='Cancel'; };
       back.querySelectorAll('input[name="colText"]').forEach(radio=>{
-        radio.addEventListener('change', ()=>{
-          setColText(radio.value);                      // apply live
-          if(ok) ok.style.display = '';                 // now offer Accept / Cancel
-          if(cancel) cancel.textContent = 'Cancel';
-        });
+        radio.addEventListener('change', ()=>{ setColText(radio.value); dirtyUI(); });
       });
+      const sel = back.querySelector('#setShowSelect');
+      if(sel) sel.addEventListener('change', ()=>{ setShowSelect(sel.checked); dirtyUI(); });
     }
   });
 }
@@ -1046,7 +1090,20 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     return `<th class="${cls}" onclick="sortCol('${kind}','${col}')">${lbl}<span class="sort-icon">${icon}</span></th>`;
   }
   const defX = pct2x(defMarkup);
-  const NCOLS = allowAccessories ? 15 : 14;   // fixtures add a Tag column; +1 for Mfr ×
+  const selCol = uiSettings.showSelect;        // leftmost selection-checkbox column
+  const NCOLS = (allowAccessories ? 15 : 14) + (selCol?1:0);   // fixtures add a Tag column; +1 for Mfr ×; +1 for select
+
+  /* Link groups (fixtures only): give each shared-cost group a stable colour,
+     a short label (the master's TYPE) and a member count so every linked row —
+     not just the master — clearly shows it's linked and to which group. */
+  const LINK_COLORS = ['#C77B1F','#2E6B4F','#3A5FA0','#7B3F9E','#A3372E','#4A7A6B','#B5852A','#356D8C'];
+  const linkInfo = {};
+  if(allowAccessories){
+    let gi = 0;
+    rows.forEach(r=>{ if(r && !r.isSection && r.linkId && !linkInfo[r.linkId]){ linkInfo[r.linkId] = {color:LINK_COLORS[gi%LINK_COLORS.length], idx:gi+1, count:0, masterType:''}; gi++; } });
+    rows.forEach(r=>{ if(r && !r.isSection && r.linkId && linkInfo[r.linkId]){ linkInfo[r.linkId].count++; if(r.linkMaster) linkInfo[r.linkId].masterType = (r.type||'').trim(); } });
+  }
+  function selCell(r){ return selCol ? `<td class="col-sel no-print"><input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')"></td>` : ''; }
 
   /* single markup field (accepts percent or decimal). Primary display = multiplier. */
   function mkCell(markupVal, dataAttrs, colCls){
@@ -1065,20 +1122,34 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       : '';
     const issues = showIssues ? rowIssues(r) : [];
     const issueCls = issues.length ? ' has-issue' : '';
+    const grp = r.linkId ? linkInfo[r.linkId] : null;
     const linkCls = r.linkId ? (r.linkMaster ? ' link-master' : ' link-linked') : '';
     const picking = (_linkPick && allowAccessories && r.linkId!==_linkPick) ? ' link-pickable' : '';
     const isLinkedFollower = r.linkId && !r.linkMaster;
     const costCell = isLinkedFollower
       ? `<td style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
       : `<td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>`;
-    const linkBtn = allowAccessories
-      ? `<button class="rowact linkbtn${r.linkId?(r.linkMaster?' is-master':' is-linked'):''}" tabindex="-1" title="${_linkPick?(r.linkId===_linkPick?(r.linkMaster?'Finish linking':'Unlink this fixture'):'Link this fixture to the master (shared cost)'):(r.linkId?'Unlink':'Link unit cost with other fixtures')}" onclick="linkAction('${kind}',${i})">${r.linkId?(r.linkMaster?'★':'🔗'):'🔗'}</button>`
-      : '';
-    return `<tr data-rk="${kind}" data-ri="${i}" class="${linkCls}${picking}${issueCls}"${issues.length?` title="${esc(issues.join(' · '))}"`:''}>
+    /* Link control: master shows ★ + group size; a follower shows 🔗 + the master's
+       TYPE so it's obvious which fixture it's linked to. A coloured chip + left
+       stripe (per group) ties members together visually. */
+    let linkBtn = '';
+    if(allowAccessories){
+      const lbl = grp ? (r.linkMaster ? `★<span class="link-rel">${esc(String(grp.count))}</span>`
+                                      : `🔗<span class="link-rel">${esc(grp.masterType||'master')}</span>`)
+                      : '🔗';
+      const ttl = _linkPick
+        ? (r.linkId===_linkPick ? (r.linkMaster?'Finish linking':'Unlink this fixture') : 'Link this fixture to the master (shared cost)')
+        : (grp ? (r.linkMaster ? `Cost master of link group L${grp.idx} (${grp.count} fixtures) — click to unlink` : `Linked to ${grp.masterType||'master'} — shares its unit cost · click to unlink`) : 'Link unit cost with other fixtures');
+      const chipStyle = grp ? ` style="--lg:${grp.color}"` : '';
+      linkBtn = `<button class="rowact linkbtn${r.linkId?(r.linkMaster?' is-master':' is-linked'):''}"${chipStyle} tabindex="-1" title="${ttl}" onclick="linkAction('${kind}',${i})">${lbl}</button>`;
+    }
+    const stripeStyle = grp ? ` style="--lg:${grp.color}"` : '';
+    return `<tr data-rk="${kind}" data-ri="${i}" class="${linkCls}${picking}${issueCls}"${stripeStyle}${issues.length?` title="${esc(issues.join(' · '))}"`:''}>
+      ${selCell(r)}
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
       <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
-      <td style="width:120px"><input list="memMfr" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
+      <td style="width:120px"><input list="${allowAccessories?'memMfr':'ctrlMfr'}" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
       <td style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
       <td style="min-width:170px" class="col-desc">${txtField(r.desc, da, 'desc', 'Part description', {list:'memDesc'})}</td>
       ${costCell}
@@ -1090,7 +1161,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td class="col-source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
       <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
       <td style="width:110px" class="no-print row-actions">
-        <input type="checkbox" class="bom-check" tabindex="-1" title="Select for bulk edit" ${bomSel.has(r.id)?'checked':''} onclick="toggleBomSel('${r.id}', this.checked)">
+        ${selCol?'':`<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select for bulk edit (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">`}
         <span class="drag-grip" draggable="true" title="Drag to move row">⠿</span>
         ${linkBtn}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
@@ -1114,6 +1185,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       const qInherit = (a.qty===null||a.qty==="");
       const mInherit = (a.markup===null||a.markup==="");
       return `<tr class="acc-row">
+        ${selCol?'<td class="col-sel no-print"></td>':''}
         <td style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':a.qty}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
         <td style="width:78px"><span class="acc-pill">Acc</span></td>
         <td class="col-tag" style="width:118px"></td>
@@ -1213,7 +1285,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     <div class="sec-add-bar no-print">${addBtns}</div>
     <div class="table-scroll">
     <table>
-      <colgroup>${(allowAccessories
+      <colgroup>${(selCol?'<col class="col-sel no-print" style="width:30px">':'')}${(allowAccessories
         ? ['qty','type','tag','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
         : ['qty','type','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
       ).map(key=>{
@@ -1222,6 +1294,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         return `<col data-col="${key}"${w!=null?` style="width:${w}px"`:''}>`;
       }).join('')}</colgroup>
       <thead><tr>
+        ${selCol?'<th class="col-sel no-print"><input type="checkbox" tabindex="-1" title="Select / clear all in this table" onclick="toggleSelectAll(\''+kind+'\', this.checked)"></th>':''}
         ${th('qty','Qty','r')}
         ${th('type','Type')}
         ${allowAccessories ? th('tag','Tag','col-tag') : ''}
@@ -1393,7 +1466,7 @@ function renderPane(){
             oninput="bomFilter=this.value;applyBomFilter()" aria-label="Find in BOM">
           ${bomFilter?`<button class="bom-find-clear" onclick="bomFilter='';render()" title="Clear">✕</button>`:''}
         </div>
-        <button class="ghost" onclick="openGlobalSearch()" title="Search across all options">🔎 All options</button>
+        <button class="ghost" onclick="openGlobalSearch()" title="Search fixtures &amp; controls across every option in this project">🔎 Search</button>
         <div class="col-menu-wrap">
           <button class="ghost" onclick="event.stopPropagation();toggleColMenu()" title="Show / hide columns">Columns ▾</button>
           <div class="col-menu" id="colMenu" onclick="event.stopPropagation()">
@@ -1772,7 +1845,105 @@ function renderCompare(){
           <tbody>${detailRows}</tbody>
         </table>
       </div>
+      <div class="cmp-detail-head no-print">
+        <button class="ghost" onclick="openCompareDiff()" title="Pick options and see which line items differ between them">⇄ Compare line-item differences…</button>
+      </div>
     </div>`;
+}
+
+/* ================= Compare options: line-item differences ================= */
+let _cmpSel = null;                 // Set of option indices chosen for the diff
+let _cmpDiffOnly = true;            // show only rows that differ
+function diffKey(r){
+  const t=(r.type||'').toUpperCase().trim(), p=(r.part||'').toUpperCase().trim(), d=(r.desc||'').toUpperCase().trim();
+  return (t||p) ? (t+'∥'+p) : ('DESC∥'+d);
+}
+function buildDiffModel(selIdx){
+  /* map key -> { label, kind, per:{optIdx:{qty,extSell}} } */
+  const map = new Map();
+  selIdx.forEach(oi=>{
+    const o = state.options[oi];
+    [['fixtures',o.fixtureMarkup],['controls',o.controlMarkup]].forEach(([kind,dm])=>{
+      (o[kind]||[]).forEach(r=>{
+        if(r.isSection) return;
+        const key = kind+'::'+diffKey(r);
+        let e = map.get(key);
+        if(!e){ e = {label:{type:r.type||'',mfr:r.mfr||'',part:r.part||'',desc:r.desc||''}, kind, per:{}}; map.set(key,e); }
+        const c = rowCalc(r, dm);
+        const cur = e.per[oi] || {qty:0, extSell:0};
+        cur.qty += numOr(r.qty,0); cur.extSell += c.extSell;
+        e.per[oi] = cur;
+      });
+    });
+  });
+  return map;
+}
+function openCompareDiff(){
+  if(state.options.length<2){ toast('Add a second option to compare'); return; }
+  if(!_cmpSel || ![..._cmpSel].some(i=>i<state.options.length)) _cmpSel = new Set(state.options.map((_,i)=>i));
+
+  const optPicker = state.options.map((o,i)=>
+    `<label class="cmp-pick"><input type="checkbox" class="cmpopt" value="${i}" ${_cmpSel.has(i)?'checked':''}> ${esc(o.name)}</label>`).join('');
+
+  const body = `
+    <p class="paste-help">Choose the options to compare. The table lists every fixture &amp; control, matched across options by <b>Type</b> + <b>Part #</b>, and highlights where quantity or extended sell differs.</p>
+    <div class="cmp-pick-row">${optPicker}</div>
+    <label class="cmp-diffonly"><input type="checkbox" id="cmpDiffOnly" ${_cmpDiffOnly?'checked':''}> Show only differences</label>
+    <div id="cmpDiffWrap" class="cmp-diff-wrap"></div>`;
+
+  openModal({
+    title:'Compare options', bodyHTML:body, wide:true, xwide:true, cancelLabel:'Close',
+    onOpen(back){
+      const wrap = back.querySelector('#cmpDiffWrap');
+      const draw = ()=>{
+        _cmpSel = new Set(Array.prototype.filter.call(back.querySelectorAll('.cmpopt'), c=>c.checked).map(c=>+c.value));
+        _cmpDiffOnly = back.querySelector('#cmpDiffOnly').checked;
+        wrap.innerHTML = renderDiffTable([..._cmpSel].sort((a,b)=>a-b));
+      };
+      back.querySelectorAll('.cmpopt').forEach(c=>c.addEventListener('change', draw));
+      back.querySelector('#cmpDiffOnly').addEventListener('change', draw);
+      draw();
+    }
+  });
+}
+function renderDiffTable(selIdx){
+  if(selIdx.length<2) return `<div class="lib-empty">Select at least two options to compare.</div>`;
+  const map = buildDiffModel(selIdx);
+  const names = selIdx.map(i=>state.options[i].name);
+  const rows = [];
+  let diffCount = 0;
+  for(const [,e] of map){
+    const vals = selIdx.map(oi=> e.per[oi] || null);
+    const sells = vals.map(v=> v? v.extSell : null);
+    const present = vals.map(v=> !!v);
+    const sellSet = new Set(sells.map(s=> s===null?'∅':Math.round(s)));
+    const qtySet = new Set(vals.map(v=> v? v.qty : '∅'));
+    const differs = sellSet.size>1 || qtySet.size>1 || present.some(p=>!p);
+    if(differs) diffCount++;
+    if(_cmpDiffOnly && !differs) continue;
+    const lbl = e.label;
+    const cells = vals.map(v=>{
+      if(!v) return `<td class="diff-missing">—</td>`;
+      return `<td class="${differs?'diff-cell':''}"><span class="diff-qty">${v.qty}×</span> ${money(v.extSell)}</td>`;
+    }).join('');
+    rows.push(`<tr class="${differs?'is-diff':''}">
+      <td class="diff-item"><span class="diff-cat">${e.kind==='controls'?'Ctrl':'Fix'}</span>
+        <b>${esc(lbl.type||'—')}</b> ${esc(lbl.mfr||'')} ${lbl.part?`<span class="mono">${esc(lbl.part)}</span>`:''}
+        <span class="diff-desc">${esc(lbl.desc||'')}</span></td>
+      ${cells}</tr>`);
+  }
+  /* totals row */
+  const totals = selIdx.map(oi=>{ let s=0; for(const [,e] of map){ if(e.per[oi]) s+=e.per[oi].extSell; } return s; });
+  const maxT = Math.max(...totals), minT = Math.min(...totals);
+  const totRow = `<tr class="diff-total"><td>Total (fixtures + controls sell)</td>${
+    totals.map(s=>`<td class="${s===minT&&maxT!==minT?'low':''}${s===maxT&&maxT!==minT?' high':''}">${money(s)}</td>`).join('')}</tr>`;
+
+  const head = `<tr><th>Line item</th>${names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr>`;
+  const note = _cmpDiffOnly
+    ? `<div class="diff-note">${diffCount} line${diffCount===1?'':'s'} differ between the selected options${rows.length?'':' — none to show'}.</div>`
+    : `<div class="diff-note">${diffCount} of ${map.size} line${map.size===1?'':'s'} differ.</div>`;
+  if(!rows.length && _cmpDiffOnly) return note + `<div class="lib-empty">These options have identical fixtures &amp; controls.</div>`;
+  return note + `<table class="diff-table"><thead>${head}</thead><tbody>${rows.join('')}${totRow}</tbody></table>`;
 }
 
 /* ================= Event binding (delegated per render) ================= */
@@ -4127,6 +4298,16 @@ window.addEventListener("keydown", e=>{
   if(e.altKey && e.key==="2"){ e.preventDefault(); setView('shipping'); return; }
   if(e.altKey && e.key==="3"){ e.preventDefault(); setView('advice'); return; }
 });
+
+/* Printing: always print on white. If the app is in dark mode, drop the dark
+   theme for the duration of the print so the output is dark-ink-on-white paper,
+   then restore it afterward. Covers the in-document estimate print (ship advice
+   and ship schedule open their own already-light print windows). */
+let _printWasDark = false;
+function _beforePrintLight(){ _printWasDark = document.body.classList.contains('dark'); if(_printWasDark) document.body.classList.remove('dark'); }
+function _afterPrintRestore(){ if(_printWasDark){ document.body.classList.add('dark'); _printWasDark = false; } }
+window.addEventListener('beforeprint', _beforePrintLight);
+window.addEventListener('afterprint', _afterPrintRestore);
 
 render();
 updateSaveStamp();
