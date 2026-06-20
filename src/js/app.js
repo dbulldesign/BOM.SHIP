@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.10.0";
+const APP_VERSION = "1.11.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -231,7 +231,7 @@ function blankChangeOrder(num, parent){
 }
 function blankProject(){
   return { name:"", jobCode:"", client:"", preparedBy:"", company:"Focus Lighting", date:new Date().toLocaleDateString(),
-           taxRate:8.875, taxLocation:"", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
+           taxRate:8.875, taxLocation:"New York", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
            shipMeta:{}, invoices:[], shipAdvices:[], savedAddresses:[],
            memory:{mfr:[],desc:[],type:[]}, customTags:[] };
 }
@@ -624,14 +624,32 @@ function applySettings(){
 }
 function setColText(mode){ uiSettings.colText = (mode==='wrap'?'wrap':'fit'); saveSettings(); applySettings(); render(); }
 function openSettings(){
+  const original = uiSettings.colText;                 // remembered so Cancel can revert
   const checked = m => uiSettings.colText===m ? 'checked' : '';
   const body = `
     <p class="paste-help">How should long text in the <b>Part No.</b>, <b>Description</b>, <b>Price source</b> and <b>Notes</b> columns be shown?</p>
-    <label class="set-opt"><input type="radio" name="colText" ${checked('fit')} onchange="setColText('fit')">
+    <label class="set-opt"><input type="radio" name="colText" value="fit" ${checked('fit')}>
       <span><b>Auto-fit to text</b><br><span class="set-sub">Fields grow to fit their content; empty cells stay compact.</span></span></label>
-    <label class="set-opt"><input type="radio" name="colText" ${checked('wrap')} onchange="setColText('wrap')">
+    <label class="set-opt"><input type="radio" name="colText" value="wrap" ${checked('wrap')}>
       <span><b>Wrap text</b><br><span class="set-sub">Long text wraps onto multiple lines within the column.</span></span></label>`;
-  openModal({ title:'Settings', bodyHTML:body, wide:false });
+  openModal({
+    title:'Settings', bodyHTML:body, wide:false,
+    cancelLabel:'Close', confirmLabel:'Accept',
+    onConfirm(){ closeModal(); },                       // keep current selection
+    onCancel(){ if(uiSettings.colText!==original){ setColText(original); } },   // revert
+    onOpen(back){
+      const ok = back.querySelector('[data-mok]');
+      const cancel = back.querySelector('[data-mclose]');
+      if(ok) ok.style.display = 'none';                 // nothing to accept until a change
+      back.querySelectorAll('input[name="colText"]').forEach(radio=>{
+        radio.addEventListener('change', ()=>{
+          setColText(radio.value);                      // apply live
+          if(ok) ok.style.display = '';                 // now offer Accept / Cancel
+          if(cancel) cancel.textContent = 'Cancel';
+        });
+      });
+    }
+  });
 }
 
 /* Renders a text cell as an <input> (auto-fit) or auto-growing <textarea> (wrap),
@@ -1923,12 +1941,13 @@ function openModal(opts){
     <h4>${esc(opts.title)}</h4>
     <div class="modal-body">${opts.bodyHTML}</div>
     <div class="modal-btns">
-      <button class="ghost" data-mclose>Cancel</button>
+      <button class="ghost" data-mclose>${esc(opts.cancelLabel||'Cancel')}</button>
       ${opts.confirmLabel?`<button class="${opts.confirmClass||'primary'}" data-mok>${esc(opts.confirmLabel)}</button>`:''}
     </div>
   </div>`;
-  back.addEventListener('click', e=>{ if(e.target===back) closeModal(); });
-  back.querySelector('[data-mclose]').addEventListener('click', closeModal);
+  const doCancel = ()=>{ if(opts.onCancel) opts.onCancel(back); closeModal(); };
+  back.addEventListener('click', e=>{ if(e.target===back) doCancel(); });
+  back.querySelector('[data-mclose]').addEventListener('click', doCancel);
   const ok = back.querySelector('[data-mok]');
   if(ok && opts.onConfirm) ok.addEventListener('click', ()=>opts.onConfirm(back));
   document.body.appendChild(back);
@@ -2023,22 +2042,23 @@ function openPasteModal(kind){
 }
 
 /* ================= Parts library (local, offline) ================= */
-const PARTS_KEY = 'lbom_parts_v1';
-function loadParts(){ try{ const a=JSON.parse(localStorage.getItem(PARTS_KEY)); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-function savePartsArr(a){ try{ localStorage.setItem(PARTS_KEY, JSON.stringify(a)); }catch(e){} }
+/* Separate saved libraries for fixtures and controls. */
+function partsKey(kind){ return kind==='controls' ? 'lbom_parts_controls_v1' : 'lbom_parts_fixtures_v1'; }
+function loadParts(kind){ try{ const a=JSON.parse(localStorage.getItem(partsKey(kind))); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function savePartsArr(kind, a){ try{ localStorage.setItem(partsKey(kind), JSON.stringify(a)); }catch(e){} }
 function savePartFromRow(kind, i){
   const r = state.options[state.current][kind][i];
   if(!r || r.isSection) return;
   if(!r.type && !r.desc && !r.part){ toast('Add a type, description, or part # first'); return; }
   const p = { id:uid(), type:r.type||'', mfr:r.mfr||'', desc:r.desc||'', part:r.part||'', unitCost:numOr(r.unitCost,0), markup:r.markup, tag:r.tag||'' };
-  const arr = loadParts();
+  const arr = loadParts(kind);
   const dupe = arr.find(x=>x.part===p.part && x.desc===p.desc && x.type===p.type);
-  if(dupe){ Object.assign(dupe, {mfr:p.mfr, unitCost:p.unitCost, markup:p.markup, tag:p.tag}); savePartsArr(arr); toast('Updated in library'); }
-  else { arr.unshift(p); savePartsArr(arr); toast('Saved to library ★'); }
+  if(dupe){ Object.assign(dupe, {mfr:p.mfr, unitCost:p.unitCost, markup:p.markup, tag:p.tag}); savePartsArr(kind, arr); toast('Updated in '+kind+' library'); }
+  else { arr.unshift(p); savePartsArr(kind, arr); toast('Saved to '+kind+' library ★'); }
 }
-function deletePart(id){ savePartsArr(loadParts().filter(p=>p.id!==id)); }
+function deletePart(kind, id){ savePartsArr(kind, loadParts(kind).filter(p=>p.id!==id)); }
 function insertPartFromLib(id, kind){
-  const p = loadParts().find(x=>x.id===id);
+  const p = loadParts(kind).find(x=>x.id===id);
   if(!p) return;
   if(!guardBaseEdit()){ closeModal(); return; }
   const r = blankRow();
@@ -2049,12 +2069,13 @@ function insertPartFromLib(id, kind){
   toast('Inserted "'+(p.type||p.desc||p.part||'part')+'"');
 }
 function openLibrary(kind){
+  const label = kind==='controls' ? 'controls' : 'fixtures';
   const listHTML = (filter='')=>{
-    const arr = loadParts();
-    if(!arr.length) return `<div class="lib-empty">Your parts library is empty.<br>Click the ★ on any row to save a part here, then insert it into future estimates.</div>`;
+    const arr = loadParts(kind);
+    if(!arr.length) return `<div class="lib-empty">Your ${label} library is empty.<br>Click the ★ on any ${label==='controls'?'control':'fixture'} row to save it here, then insert it into future estimates.</div>`;
     const q = filter.trim().toLowerCase();
     const shown = q ? arr.filter(p=>[p.type,p.mfr,p.desc,p.part].join(' ').toLowerCase().includes(q)) : arr;
-    if(!shown.length) return `<div class="lib-empty">No saved parts match "${esc(filter)}".</div>`;
+    if(!shown.length) return `<div class="lib-empty">No saved ${label} match "${esc(filter)}".</div>`;
     return `<div class="lib-list">${shown.map(p=>`<div class="lib-item">
         <div class="lib-main"><span class="lib-type">${esc(p.type||'—')}</span><span class="lib-desc">${esc(p.desc||'')}${p.part?' · '+esc(p.part):''}</span></div>
         <span class="lib-meta">${money(numOr(p.unitCost,0))}</span>
@@ -2062,16 +2083,16 @@ function openLibrary(kind){
         <button class="rowdel" data-del="${p.id}" title="Remove from library">✕</button>
       </div>`).join('')}</div>`;
   };
-  const body = `<input class="lib-search" id="libSearch" placeholder="Search saved parts…" autocomplete="off">
+  const body = `<input class="lib-search" id="libSearch" placeholder="Search saved ${label}…" autocomplete="off">
     <div id="libListWrap">${listHTML()}</div>`;
   openModal({
-    title:'Parts library', bodyHTML:body, wide:true,
+    title:label.charAt(0).toUpperCase()+label.slice(1)+' library', bodyHTML:body, wide:true,
     onOpen(back){
       const wrap = back.querySelector('#libListWrap');
       const search = back.querySelector('#libSearch');
       const bind = ()=>{
         wrap.querySelectorAll('[data-ins]').forEach(b=> b.addEventListener('click', ()=>insertPartFromLib(b.dataset.ins, kind)));
-        wrap.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{ deletePart(b.dataset.del); wrap.innerHTML = listHTML(search.value); bind(); }));
+        wrap.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{ deletePart(kind, b.dataset.del); wrap.innerHTML = listHTML(search.value); bind(); }));
       };
       search.addEventListener('input', ()=>{ wrap.innerHTML = listHTML(search.value); bind(); });
       bind(); search.focus();

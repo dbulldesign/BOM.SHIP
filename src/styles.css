@@ -1,5 +1,5 @@
 :root{
-    --ink:#20242C; --ink-soft:#5A6070; --paper:#F2F1EC; --sheet:#FFFFFF;
+    --ink:#20242C; --ink-soft:#5A6070; --paper:#F2F1EC; --sheet:#FFFFFF; --chip:#20242C;
     --rule:#D9D6CB; --rule-dark:#B9B5A6;
     --amber:#C77B1F; --amber-deep:#9A5E13; --amber-wash:#FBF3E4;
     --sell:#2E6B4F; --sell-wash:#EDF5F0;
@@ -8,7 +8,7 @@
     --ui:"Segoe UI","Segoe UI Variable",system-ui,Arial,sans-serif;
   }
   body.dark{
-    --ink:#E4E0D8; --ink-soft:#8A8F9E; --paper:#16181F; --sheet:#21242E;
+    --ink:#E4E0D8; --ink-soft:#8A8F9E; --paper:#16181F; --sheet:#21242E; --chip:#3A3F4C;
     --rule:#2C303C; --rule-dark:#3A3F50;
     --amber:#D4941F; --amber-deep:#E8A830; --amber-wash:#272010;
     --sell:#4CAF81; --sell-wash:#0F2218;
@@ -51,8 +51,8 @@
 
   button{font-family:var(--ui);cursor:pointer;border:1px solid var(--ink);background:var(--sheet);
     color:var(--ink);padding:7px 13px;font-size:.82rem;font-weight:600;border-radius:2px}
-  button:hover{background:var(--ink);color:#fff}
-  button.primary{background:var(--ink);color:#fff}
+  button:hover{background:var(--chip);color:#fff}
+  button.primary{background:var(--chip);color:#fff}
   button.primary:hover{background:var(--amber-deep);border-color:var(--amber-deep)}
   button.ghost{border-color:var(--rule-dark);font-weight:500}
   button.ghost:hover{background:var(--paper);color:var(--ink);border-color:var(--ink)}
@@ -88,8 +88,8 @@
   .vs-btn{border:none;background:transparent;color:var(--ink-soft);padding:7px 16px;font-size:.8rem;
     font-weight:600;border-radius:0;letter-spacing:.02em}
   .vs-btn:hover{background:var(--paper);color:var(--ink)}
-  .vs-btn.active{background:var(--ink);color:#fff}
-  .vs-btn.active:hover{background:var(--ink);color:#fff}
+  .vs-btn.active{background:var(--chip);color:#fff}
+  .vs-btn.active:hover{background:var(--chip);color:#fff}
 
   /* ---------- Shipping module ---------- */
   .ship-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:24px 0 18px}
@@ -145,7 +145,7 @@
   .ship-table tr.ship-group-row td{background:var(--amber-wash);border-top:2px solid var(--amber);
     border-bottom:1px solid var(--amber);padding:5px 10px}
   body.dark .ship-table tr.ship-group-row td{background:#2A2310}
-  .ship-table tr.ship-cat-row td{background:var(--ink);color:#fff;padding:7px 12px;border-top:2px solid var(--ink)}
+  .ship-table tr.ship-cat-row td{background:var(--chip);color:#fff;padding:7px 12px;border-top:2px solid var(--ink)}
   body.dark .ship-table tr.ship-cat-row td{background:#2E3240}
   .scr-label{font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#E9B45C}
   .scr-opt{font-size:.66rem;color:#B9BCC6;margin-left:12px}
@@ -172,7 +172,7 @@
   .add-piece-btn:hover{border-color:var(--sell);color:var(--sell)}
   /* ---- Ship Advice ---- */
   .adv-card{border:2px solid var(--rule-dark);background:var(--sheet);border-radius:4px;margin-bottom:22px;overflow:hidden}
-  .adv-card-head{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--ink);color:#fff}
+  .adv-card-head{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--chip);color:#fff}
   body.dark .adv-card-head{background:#2E3240}
   .adv-shipname{display:flex;align-items:center;gap:10px;flex:1}
   .adv-shipname label{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:#E9B45C;font-weight:700}
@@ -302,7 +302,7 @@
   .inv-item .ii-unassign:hover{color:var(--danger)}
   .inv-empty-items{padding:14px;text-align:center;color:var(--ink-soft);font-size:.76rem;font-style:italic}
   .inv-total{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;
-    background:var(--ink);color:#fff}
+    background:var(--chip);color:#fff}
   .inv-total .it-label{font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:#E9B45C;font-weight:700}
   .inv-total .it-amt{font-family:var(--mono);font-size:1.05rem;font-weight:600}
   body.dark .inv-card-head{background:#1A1D26}
@@ -552,11 +552,9 @@
   .stamp-row .lbl{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
   .stamp-row .val{font-family:var(--mono);font-size:.95rem}
   .stamp-row.muted .val{color:var(--ink-soft);font-size:.85rem}
-  .stamp-row.tax{background:var(--ink)}
-  .stamp-row.tax .lbl{display:flex;align-items:center;gap:6px;color:#fff}
-  .stamp-row.tax .val{color:#fff}
-  .stamp-row.tax input{background:#2E3240;color:#fff;border-color:#3A3F4C}
-  .stamp-row.grand{background:var(--ink);color:#fff;padding:12px 14px}
+  .stamp-row.tax .lbl{display:flex;align-items:center;gap:6px}
+  .stamp-row.tax input{background:transparent}
+  .stamp-row.grand{background:var(--chip);color:#fff;padding:12px 14px}
   .stamp-row.grand .lbl{color:#E9B45C;font-weight:700}
   .stamp-row.grand .val{font-size:1.3rem;font-weight:600;color:#fff}
   .stamp input{width:62px;font-family:var(--mono);font-size:.8rem;text-align:right;
@@ -623,7 +621,7 @@
     background:#FBF3E4;color:var(--amber-deep);padding:4px 6px;border:1px solid #E9D0A4}
   .cmp-card-goto{margin-top:12px;font-size:.75rem;border-color:var(--rule-dark);padding:5px 10px;width:100%;
     font-weight:500;background:var(--paper)}
-  .cmp-card-goto:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .cmp-card-goto:hover{background:var(--chip);color:#fff;border-color:var(--ink)}
   .cmp-card.active .cmp-card-goto{display:none}
 
   /* detail table */
@@ -636,7 +634,7 @@
   .cmp-detail tbody td:first-child{font-family:var(--ui);font-weight:600;font-size:.82rem;color:var(--ink-soft)}
   .cmp-detail tbody tr.sect-head td{background:var(--paper);font-family:var(--ui);font-weight:700;
     font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);padding:5px 11px}
-  .cmp-detail tbody tr.grand-tr td{background:var(--ink);color:#fff;font-weight:700;font-size:.92rem}
+  .cmp-detail tbody tr.grand-tr td{background:var(--chip);color:#fff;font-weight:700;font-size:.92rem}
   .cmp-detail tbody tr.grand-tr td:first-child{font-family:var(--ui);letter-spacing:.08em;text-transform:uppercase;
     font-size:.7rem;color:#E9B45C}
   .cmp-detail tbody tr.low td{color:var(--sell)}
@@ -644,7 +642,7 @@
   .cmp-cur-marker{font-size:.65rem;color:var(--amber);margin-left:4px}
 
   .hint{font-size:.74rem;color:var(--ink-soft);margin-top:14px}
-  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--chip);color:#fff;
     padding:10px 20px;border-radius:3px;font-size:.84rem;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50}
   .toast.show{opacity:1}
 

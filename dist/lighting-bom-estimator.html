@@ -6,7 +6,7 @@
 <title>Lighting BOM Estimator</title>
 <style>
 :root{
-    --ink:#20242C; --ink-soft:#5A6070; --paper:#F2F1EC; --sheet:#FFFFFF;
+    --ink:#20242C; --ink-soft:#5A6070; --paper:#F2F1EC; --sheet:#FFFFFF; --chip:#20242C;
     --rule:#D9D6CB; --rule-dark:#B9B5A6;
     --amber:#C77B1F; --amber-deep:#9A5E13; --amber-wash:#FBF3E4;
     --sell:#2E6B4F; --sell-wash:#EDF5F0;
@@ -15,7 +15,7 @@
     --ui:"Segoe UI","Segoe UI Variable",system-ui,Arial,sans-serif;
   }
   body.dark{
-    --ink:#E4E0D8; --ink-soft:#8A8F9E; --paper:#16181F; --sheet:#21242E;
+    --ink:#E4E0D8; --ink-soft:#8A8F9E; --paper:#16181F; --sheet:#21242E; --chip:#3A3F4C;
     --rule:#2C303C; --rule-dark:#3A3F50;
     --amber:#D4941F; --amber-deep:#E8A830; --amber-wash:#272010;
     --sell:#4CAF81; --sell-wash:#0F2218;
@@ -58,8 +58,8 @@
 
   button{font-family:var(--ui);cursor:pointer;border:1px solid var(--ink);background:var(--sheet);
     color:var(--ink);padding:7px 13px;font-size:.82rem;font-weight:600;border-radius:2px}
-  button:hover{background:var(--ink);color:#fff}
-  button.primary{background:var(--ink);color:#fff}
+  button:hover{background:var(--chip);color:#fff}
+  button.primary{background:var(--chip);color:#fff}
   button.primary:hover{background:var(--amber-deep);border-color:var(--amber-deep)}
   button.ghost{border-color:var(--rule-dark);font-weight:500}
   button.ghost:hover{background:var(--paper);color:var(--ink);border-color:var(--ink)}
@@ -95,8 +95,8 @@
   .vs-btn{border:none;background:transparent;color:var(--ink-soft);padding:7px 16px;font-size:.8rem;
     font-weight:600;border-radius:0;letter-spacing:.02em}
   .vs-btn:hover{background:var(--paper);color:var(--ink)}
-  .vs-btn.active{background:var(--ink);color:#fff}
-  .vs-btn.active:hover{background:var(--ink);color:#fff}
+  .vs-btn.active{background:var(--chip);color:#fff}
+  .vs-btn.active:hover{background:var(--chip);color:#fff}
 
   /* ---------- Shipping module ---------- */
   .ship-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:24px 0 18px}
@@ -152,7 +152,7 @@
   .ship-table tr.ship-group-row td{background:var(--amber-wash);border-top:2px solid var(--amber);
     border-bottom:1px solid var(--amber);padding:5px 10px}
   body.dark .ship-table tr.ship-group-row td{background:#2A2310}
-  .ship-table tr.ship-cat-row td{background:var(--ink);color:#fff;padding:7px 12px;border-top:2px solid var(--ink)}
+  .ship-table tr.ship-cat-row td{background:var(--chip);color:#fff;padding:7px 12px;border-top:2px solid var(--ink)}
   body.dark .ship-table tr.ship-cat-row td{background:#2E3240}
   .scr-label{font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#E9B45C}
   .scr-opt{font-size:.66rem;color:#B9BCC6;margin-left:12px}
@@ -179,7 +179,7 @@
   .add-piece-btn:hover{border-color:var(--sell);color:var(--sell)}
   /* ---- Ship Advice ---- */
   .adv-card{border:2px solid var(--rule-dark);background:var(--sheet);border-radius:4px;margin-bottom:22px;overflow:hidden}
-  .adv-card-head{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--ink);color:#fff}
+  .adv-card-head{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--chip);color:#fff}
   body.dark .adv-card-head{background:#2E3240}
   .adv-shipname{display:flex;align-items:center;gap:10px;flex:1}
   .adv-shipname label{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:#E9B45C;font-weight:700}
@@ -309,7 +309,7 @@
   .inv-item .ii-unassign:hover{color:var(--danger)}
   .inv-empty-items{padding:14px;text-align:center;color:var(--ink-soft);font-size:.76rem;font-style:italic}
   .inv-total{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;
-    background:var(--ink);color:#fff}
+    background:var(--chip);color:#fff}
   .inv-total .it-label{font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:#E9B45C;font-weight:700}
   .inv-total .it-amt{font-family:var(--mono);font-size:1.05rem;font-weight:600}
   body.dark .inv-card-head{background:#1A1D26}
@@ -559,11 +559,9 @@
   .stamp-row .lbl{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
   .stamp-row .val{font-family:var(--mono);font-size:.95rem}
   .stamp-row.muted .val{color:var(--ink-soft);font-size:.85rem}
-  .stamp-row.tax{background:var(--ink)}
-  .stamp-row.tax .lbl{display:flex;align-items:center;gap:6px;color:#fff}
-  .stamp-row.tax .val{color:#fff}
-  .stamp-row.tax input{background:#2E3240;color:#fff;border-color:#3A3F4C}
-  .stamp-row.grand{background:var(--ink);color:#fff;padding:12px 14px}
+  .stamp-row.tax .lbl{display:flex;align-items:center;gap:6px}
+  .stamp-row.tax input{background:transparent}
+  .stamp-row.grand{background:var(--chip);color:#fff;padding:12px 14px}
   .stamp-row.grand .lbl{color:#E9B45C;font-weight:700}
   .stamp-row.grand .val{font-size:1.3rem;font-weight:600;color:#fff}
   .stamp input{width:62px;font-family:var(--mono);font-size:.8rem;text-align:right;
@@ -630,7 +628,7 @@
     background:#FBF3E4;color:var(--amber-deep);padding:4px 6px;border:1px solid #E9D0A4}
   .cmp-card-goto{margin-top:12px;font-size:.75rem;border-color:var(--rule-dark);padding:5px 10px;width:100%;
     font-weight:500;background:var(--paper)}
-  .cmp-card-goto:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .cmp-card-goto:hover{background:var(--chip);color:#fff;border-color:var(--ink)}
   .cmp-card.active .cmp-card-goto{display:none}
 
   /* detail table */
@@ -643,7 +641,7 @@
   .cmp-detail tbody td:first-child{font-family:var(--ui);font-weight:600;font-size:.82rem;color:var(--ink-soft)}
   .cmp-detail tbody tr.sect-head td{background:var(--paper);font-family:var(--ui);font-weight:700;
     font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);padding:5px 11px}
-  .cmp-detail tbody tr.grand-tr td{background:var(--ink);color:#fff;font-weight:700;font-size:.92rem}
+  .cmp-detail tbody tr.grand-tr td{background:var(--chip);color:#fff;font-weight:700;font-size:.92rem}
   .cmp-detail tbody tr.grand-tr td:first-child{font-family:var(--ui);letter-spacing:.08em;text-transform:uppercase;
     font-size:.7rem;color:#E9B45C}
   .cmp-detail tbody tr.low td{color:var(--sell)}
@@ -651,7 +649,7 @@
   .cmp-cur-marker{font-size:.65rem;color:var(--amber);margin-left:4px}
 
   .hint{font-size:.74rem;color:var(--ink-soft);margin-top:14px}
-  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--chip);color:#fff;
     padding:10px 20px;border-radius:3px;font-size:.84rem;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50}
   .toast.show{opacity:1}
 
@@ -957,7 +955,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.10.0";
+const APP_VERSION = "1.11.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1177,7 +1175,7 @@ function blankChangeOrder(num, parent){
 }
 function blankProject(){
   return { name:"", jobCode:"", client:"", preparedBy:"", company:"Focus Lighting", date:new Date().toLocaleDateString(),
-           taxRate:8.875, taxLocation:"", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
+           taxRate:8.875, taxLocation:"New York", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
            shipMeta:{}, invoices:[], shipAdvices:[], savedAddresses:[],
            memory:{mfr:[],desc:[],type:[]}, customTags:[] };
 }
@@ -1570,14 +1568,32 @@ function applySettings(){
 }
 function setColText(mode){ uiSettings.colText = (mode==='wrap'?'wrap':'fit'); saveSettings(); applySettings(); render(); }
 function openSettings(){
+  const original = uiSettings.colText;                 // remembered so Cancel can revert
   const checked = m => uiSettings.colText===m ? 'checked' : '';
   const body = `
     <p class="paste-help">How should long text in the <b>Part No.</b>, <b>Description</b>, <b>Price source</b> and <b>Notes</b> columns be shown?</p>
-    <label class="set-opt"><input type="radio" name="colText" ${checked('fit')} onchange="setColText('fit')">
+    <label class="set-opt"><input type="radio" name="colText" value="fit" ${checked('fit')}>
       <span><b>Auto-fit to text</b><br><span class="set-sub">Fields grow to fit their content; empty cells stay compact.</span></span></label>
-    <label class="set-opt"><input type="radio" name="colText" ${checked('wrap')} onchange="setColText('wrap')">
+    <label class="set-opt"><input type="radio" name="colText" value="wrap" ${checked('wrap')}>
       <span><b>Wrap text</b><br><span class="set-sub">Long text wraps onto multiple lines within the column.</span></span></label>`;
-  openModal({ title:'Settings', bodyHTML:body, wide:false });
+  openModal({
+    title:'Settings', bodyHTML:body, wide:false,
+    cancelLabel:'Close', confirmLabel:'Accept',
+    onConfirm(){ closeModal(); },                       // keep current selection
+    onCancel(){ if(uiSettings.colText!==original){ setColText(original); } },   // revert
+    onOpen(back){
+      const ok = back.querySelector('[data-mok]');
+      const cancel = back.querySelector('[data-mclose]');
+      if(ok) ok.style.display = 'none';                 // nothing to accept until a change
+      back.querySelectorAll('input[name="colText"]').forEach(radio=>{
+        radio.addEventListener('change', ()=>{
+          setColText(radio.value);                      // apply live
+          if(ok) ok.style.display = '';                 // now offer Accept / Cancel
+          if(cancel) cancel.textContent = 'Cancel';
+        });
+      });
+    }
+  });
 }
 
 /* Renders a text cell as an <input> (auto-fit) or auto-growing <textarea> (wrap),
@@ -2869,12 +2885,13 @@ function openModal(opts){
     <h4>${esc(opts.title)}</h4>
     <div class="modal-body">${opts.bodyHTML}</div>
     <div class="modal-btns">
-      <button class="ghost" data-mclose>Cancel</button>
+      <button class="ghost" data-mclose>${esc(opts.cancelLabel||'Cancel')}</button>
       ${opts.confirmLabel?`<button class="${opts.confirmClass||'primary'}" data-mok>${esc(opts.confirmLabel)}</button>`:''}
     </div>
   </div>`;
-  back.addEventListener('click', e=>{ if(e.target===back) closeModal(); });
-  back.querySelector('[data-mclose]').addEventListener('click', closeModal);
+  const doCancel = ()=>{ if(opts.onCancel) opts.onCancel(back); closeModal(); };
+  back.addEventListener('click', e=>{ if(e.target===back) doCancel(); });
+  back.querySelector('[data-mclose]').addEventListener('click', doCancel);
   const ok = back.querySelector('[data-mok]');
   if(ok && opts.onConfirm) ok.addEventListener('click', ()=>opts.onConfirm(back));
   document.body.appendChild(back);
@@ -2969,22 +2986,23 @@ function openPasteModal(kind){
 }
 
 /* ================= Parts library (local, offline) ================= */
-const PARTS_KEY = 'lbom_parts_v1';
-function loadParts(){ try{ const a=JSON.parse(localStorage.getItem(PARTS_KEY)); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-function savePartsArr(a){ try{ localStorage.setItem(PARTS_KEY, JSON.stringify(a)); }catch(e){} }
+/* Separate saved libraries for fixtures and controls. */
+function partsKey(kind){ return kind==='controls' ? 'lbom_parts_controls_v1' : 'lbom_parts_fixtures_v1'; }
+function loadParts(kind){ try{ const a=JSON.parse(localStorage.getItem(partsKey(kind))); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function savePartsArr(kind, a){ try{ localStorage.setItem(partsKey(kind), JSON.stringify(a)); }catch(e){} }
 function savePartFromRow(kind, i){
   const r = state.options[state.current][kind][i];
   if(!r || r.isSection) return;
   if(!r.type && !r.desc && !r.part){ toast('Add a type, description, or part # first'); return; }
   const p = { id:uid(), type:r.type||'', mfr:r.mfr||'', desc:r.desc||'', part:r.part||'', unitCost:numOr(r.unitCost,0), markup:r.markup, tag:r.tag||'' };
-  const arr = loadParts();
+  const arr = loadParts(kind);
   const dupe = arr.find(x=>x.part===p.part && x.desc===p.desc && x.type===p.type);
-  if(dupe){ Object.assign(dupe, {mfr:p.mfr, unitCost:p.unitCost, markup:p.markup, tag:p.tag}); savePartsArr(arr); toast('Updated in library'); }
-  else { arr.unshift(p); savePartsArr(arr); toast('Saved to library ★'); }
+  if(dupe){ Object.assign(dupe, {mfr:p.mfr, unitCost:p.unitCost, markup:p.markup, tag:p.tag}); savePartsArr(kind, arr); toast('Updated in '+kind+' library'); }
+  else { arr.unshift(p); savePartsArr(kind, arr); toast('Saved to '+kind+' library ★'); }
 }
-function deletePart(id){ savePartsArr(loadParts().filter(p=>p.id!==id)); }
+function deletePart(kind, id){ savePartsArr(kind, loadParts(kind).filter(p=>p.id!==id)); }
 function insertPartFromLib(id, kind){
-  const p = loadParts().find(x=>x.id===id);
+  const p = loadParts(kind).find(x=>x.id===id);
   if(!p) return;
   if(!guardBaseEdit()){ closeModal(); return; }
   const r = blankRow();
@@ -2995,12 +3013,13 @@ function insertPartFromLib(id, kind){
   toast('Inserted "'+(p.type||p.desc||p.part||'part')+'"');
 }
 function openLibrary(kind){
+  const label = kind==='controls' ? 'controls' : 'fixtures';
   const listHTML = (filter='')=>{
-    const arr = loadParts();
-    if(!arr.length) return `<div class="lib-empty">Your parts library is empty.<br>Click the ★ on any row to save a part here, then insert it into future estimates.</div>`;
+    const arr = loadParts(kind);
+    if(!arr.length) return `<div class="lib-empty">Your ${label} library is empty.<br>Click the ★ on any ${label==='controls'?'control':'fixture'} row to save it here, then insert it into future estimates.</div>`;
     const q = filter.trim().toLowerCase();
     const shown = q ? arr.filter(p=>[p.type,p.mfr,p.desc,p.part].join(' ').toLowerCase().includes(q)) : arr;
-    if(!shown.length) return `<div class="lib-empty">No saved parts match "${esc(filter)}".</div>`;
+    if(!shown.length) return `<div class="lib-empty">No saved ${label} match "${esc(filter)}".</div>`;
     return `<div class="lib-list">${shown.map(p=>`<div class="lib-item">
         <div class="lib-main"><span class="lib-type">${esc(p.type||'—')}</span><span class="lib-desc">${esc(p.desc||'')}${p.part?' · '+esc(p.part):''}</span></div>
         <span class="lib-meta">${money(numOr(p.unitCost,0))}</span>
@@ -3008,16 +3027,16 @@ function openLibrary(kind){
         <button class="rowdel" data-del="${p.id}" title="Remove from library">✕</button>
       </div>`).join('')}</div>`;
   };
-  const body = `<input class="lib-search" id="libSearch" placeholder="Search saved parts…" autocomplete="off">
+  const body = `<input class="lib-search" id="libSearch" placeholder="Search saved ${label}…" autocomplete="off">
     <div id="libListWrap">${listHTML()}</div>`;
   openModal({
-    title:'Parts library', bodyHTML:body, wide:true,
+    title:label.charAt(0).toUpperCase()+label.slice(1)+' library', bodyHTML:body, wide:true,
     onOpen(back){
       const wrap = back.querySelector('#libListWrap');
       const search = back.querySelector('#libSearch');
       const bind = ()=>{
         wrap.querySelectorAll('[data-ins]').forEach(b=> b.addEventListener('click', ()=>insertPartFromLib(b.dataset.ins, kind)));
-        wrap.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{ deletePart(b.dataset.del); wrap.innerHTML = listHTML(search.value); bind(); }));
+        wrap.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{ deletePart(kind, b.dataset.del); wrap.innerHTML = listHTML(search.value); bind(); }));
       };
       search.addEventListener('input', ()=>{ wrap.innerHTML = listHTML(search.value); bind(); });
       bind(); search.focus();
