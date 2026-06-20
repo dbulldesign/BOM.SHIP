@@ -1041,3 +1041,14 @@
     border:1px solid var(--rule-dark);border-radius:2px;background:var(--sheet);color:var(--ink)}
   .col-filter-in:focus{outline:none;border-color:var(--amber);background:var(--amber-wash)}
   body.dark .col-filter-in:focus{background:#2A2310}
+
+  /* ===== Ship schedule: ETA color coding ===== */
+  tr.eta-green > td:first-child{box-shadow:inset 3px 0 0 0 #2E8B57}
+  tr.eta-red > td:first-child{box-shadow:inset 3px 0 0 0 #C0392B}
+  tr.eta-yellow > td:first-child{box-shadow:inset 3px 0 0 0 #D4A017}
+  tr.eta-green:not(.sel) > td{background:rgba(46,139,87,.07)}
+  tr.eta-red:not(.sel) > td{background:rgba(192,57,43,.09)}
+  tr.eta-yellow:not(.sel) > td{background:rgba(212,160,23,.10)}
+  body.dark tr.eta-green:not(.sel) > td{background:rgba(46,139,87,.16)}
+  body.dark tr.eta-red:not(.sel) > td{background:rgba(192,57,43,.18)}
+  body.dark tr.eta-yellow:not(.sel) > td{background:rgba(212,160,23,.16)}
