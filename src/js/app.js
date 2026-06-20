@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.23.0";
+const APP_VERSION = "1.24.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3163,6 +3163,88 @@ function bulkBackorderSelected(){
   markDirty(); renderShipping();
 }
 
+/* ---- Clipboard helper (works in the offline file:// app too) ---- */
+function fallbackCopy(text){
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  }catch(e){ return false; }
+}
+function copyToClipboard(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).then(()=>true).catch(()=>fallbackCopy(text));
+  }
+  return Promise.resolve(fallbackCopy(text));
+}
+
+/* ============================================================================
+ * Invoice email text.
+ *
+ * buildInvoiceEmail() assembles the text that gets copied to the clipboard for
+ * pasting into an email. The WORDING lives in the clearly-marked template block
+ * below — when you provide the final copy, only that block needs to change.
+ * Available data: project (state.name/jobCode/client/company/preparedBy), the
+ * invoice (inv.name/number/date/status), the assigned line items, and the total.
+ * ==========================================================================*/
+function buildInvoiceEmail(inv){
+  const items = invoiceItems(inv.id);
+  const total = invoiceTotal(inv.id);
+  const projName = (state.name||'').trim();
+  const proj = [projName, state.jobCode?('('+state.jobCode+')'):''].filter(Boolean).join(' ');
+  const company = (state.company||'Focus Lighting').trim();
+  const itemLines = items.map(l=>{
+    const qty = numOr(l.qty,0);
+    const label = [l.type, l.mfr, (l.desc||l.part||'Item')].filter(Boolean).join(' · ');
+    return `  • ${qty? qty+'× ':''}${label} — ${money(numOr(l.sold,0))}`;
+  });
+
+  /* ===== EMAIL TEMPLATE — replace this wording with the final copy ===== */
+  const L = [];
+  L.push(`Subject: ${company} — Invoice ${inv.number||inv.name}${proj?(' — '+proj):''}`);
+  L.push('');
+  L.push(`Hi${state.client?(' '+state.client):''},`);
+  L.push('');
+  L.push(`Please find ${company}'s invoice ${inv.number||inv.name}${inv.date?(', dated '+inv.date):''}${proj?(', for '+proj):''} below.`);
+  L.push('');
+  if(itemLines.length){
+    L.push('Items:');
+    L.push(...itemLines);
+    L.push('');
+  }
+  L.push(`Invoice total: ${money(total)}`);
+  L.push('');
+  L.push('Please let us know if you have any questions.');
+  L.push('');
+  L.push('Thank you,');
+  if(state.preparedBy) L.push(state.preparedBy);
+  L.push(company);
+  /* ===== END TEMPLATE ===== */
+
+  /* collapse any accidental double blank lines */
+  return L.filter((l,i,a)=> !(l==='' && a[i-1]==='')).join('\n');
+}
+function openInvoiceEmail(invId){
+  const inv = state.invoices.find(v=>v.id===invId); if(!inv) return;
+  const text = buildInvoiceEmail(inv);
+  openModal({
+    title:'Invoice email text', wide:true, cancelLabel:'Close',
+    bodyHTML:`<p class="paste-help">Auto-generated from this invoice. Edit here if you like, then copy and paste it into your email.</p>
+      <textarea id="invEmailTxt" class="inv-email-txt" spellcheck="false">${esc(text)}</textarea>
+      <div class="lib-io"><button class="primary" id="invEmailCopy">📋 Copy to clipboard</button></div>`,
+    onOpen(back){
+      const ta = back.querySelector('#invEmailTxt');
+      const btn = back.querySelector('#invEmailCopy');
+      btn.addEventListener('click', ()=>{
+        copyToClipboard(ta.value).then(ok=> toast(ok?'Email text copied to clipboard':'Select the text and press Ctrl/Cmd+C'));
+        ta.focus(); try{ ta.select(); }catch(e){}
+      });
+      ta.focus(); try{ ta.select(); }catch(e){}
+    }
+  });
+}
+
 function invoicesPanel(){
   const cards = state.invoices.map(v=>{
     const items = invoiceItems(v.id);
@@ -3189,6 +3271,7 @@ function invoicesPanel(){
       </div>
       <div class="inv-items">${itemRows}</div>
       <div class="inv-total"><span class="it-label">Invoice total</span><span class="it-amt">${money(total)}</span></div>
+      <div class="inv-actions no-print"><button class="ghost" onclick="openInvoiceEmail('${v.id}')" title="Generate email text you can copy & paste">✉ Copy email text</button></div>
     </div>`;
   }).join('');
 
