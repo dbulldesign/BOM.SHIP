@@ -922,3 +922,10 @@
     body.dark .stamp-row.grand{background:#20242C;color:#fff}
     .col-sel{display:none !important}
   }
+
+  /* ===== Invoice email text ===== */
+  .inv-actions{margin-top:8px;display:flex;justify-content:flex-end}
+  .inv-email-txt{width:100%;min-height:300px;font-family:var(--mono);font-size:.82rem;line-height:1.5;
+    padding:10px 12px;border:1px solid var(--rule-dark);border-radius:4px;background:var(--sheet);color:var(--ink);
+    resize:vertical;white-space:pre-wrap}
+  .inv-email-txt:focus{outline:none;border-color:var(--amber)}
