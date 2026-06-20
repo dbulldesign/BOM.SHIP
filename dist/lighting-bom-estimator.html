@@ -955,7 +955,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.12.0";
+const APP_VERSION = "1.13.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3409,7 +3409,7 @@ function renderShipping(){
         <span class="seg-label">Export schedule:</span>
         <button class="ghost" onclick="exportShipCSV()">CSV</button>
         <button class="ghost" onclick="exportShipXLSX()">Excel</button>
-        <button class="ghost" onclick="printShipSchedule()">PDF / Print</button>
+        <button class="ghost" onclick="openShipPrint()">PDF / Print</button>
       </div>
     </div>`;
 
@@ -3722,6 +3722,45 @@ function exportSuffix(){
 }
 const SHIP_EXPORT_COLS = ['Option','Category','Type','Manufacturer','Description','Part Number','Qty','Sold $','Status',
   'PO','Order Date','Received Date','Est. Ship','Shipped Date','Shipper','Tracking','Delivery Date','Comments','Invoice'];
+/* Printable ship-schedule columns (key + label), with show/hide presets. */
+const SHIP_PRINT_COLS = [
+  {key:'optName',label:'Option'},{key:'cat',label:'Category'},{key:'type',label:'Type'},
+  {key:'mfr',label:'Manufacturer'},{key:'desc',label:'Description'},{key:'part',label:'Part Number'},
+  {key:'qty',label:'Qty'},{key:'sold',label:'Sold $'},{key:'status',label:'Status'},
+  {key:'po',label:'PO'},{key:'orderDate',label:'Order Date'},{key:'recvDate',label:'Received Date'},
+  {key:'estShip',label:'Est. Ship'},{key:'shipDate',label:'Shipped Date'},{key:'shipper',label:'Shipper'},
+  {key:'tracking',label:'Tracking'},{key:'delivery',label:'Delivery Date'},{key:'comments',label:'Comments'},
+  {key:'invoice',label:'Invoice'}
+];
+const SHIP_CLIENT_HIDDEN = ['sold','po','orderDate','recvDate','invoice'];   // the "Client" preset
+let shipPrintHidden = (()=>{ try{ const a=JSON.parse(localStorage.getItem('lbom_shipcols_v1')); return new Set(Array.isArray(a)?a:[]); }catch(e){ return new Set(); } })();
+function saveShipCols(){ try{ localStorage.setItem('lbom_shipcols_v1', JSON.stringify([...shipPrintHidden])); }catch(e){} }
+function shipPrintColsVisible(){ return SHIP_PRINT_COLS.filter(c=>!shipPrintHidden.has(c.key)); }
+function openShipPrint(){
+  const cols = SHIP_PRINT_COLS.map(c=>`<label class="set-opt" style="padding:6px 10px;margin-bottom:4px"><input type="checkbox" data-shipcol="${c.key}" ${shipPrintHidden.has(c.key)?'':'checked'}> ${c.label}</label>`).join('');
+  const body = `<p class="paste-help">Choose which columns to print. <b>All</b> shows everything; <b>Client</b> hides Sold $, PO #, Order date, Received date and Invoice; <b>Custom</b> is your own pick.</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="ghost" data-preset="all">All</button>
+      <button class="ghost" data-preset="client">Client</button>
+      <button class="ghost" data-preset="custom" title="Pick columns below">Custom</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px">${cols}</div>`;
+  openModal({
+    title:'Print ship schedule', bodyHTML:body, wide:true, confirmLabel:'Print', cancelLabel:'Cancel',
+    onConfirm(){ saveShipCols(); closeModal(); printShipSchedule(); },
+    onOpen(back){
+      const boxes = back.querySelectorAll('[data-shipcol]');
+      const reflect = ()=> boxes.forEach(cb=>{ cb.checked = !shipPrintHidden.has(cb.dataset.shipcol); });
+      back.querySelectorAll('[data-preset]').forEach(b=> b.addEventListener('click', ()=>{
+        const p=b.dataset.preset;
+        if(p==='all') shipPrintHidden = new Set();
+        else if(p==='client') shipPrintHidden = new Set(SHIP_CLIENT_HIDDEN);
+        if(p!=='custom') reflect();
+      }));
+      boxes.forEach(cb=> cb.addEventListener('change', ()=>{ if(cb.checked) shipPrintHidden.delete(cb.dataset.shipcol); else shipPrintHidden.add(cb.dataset.shipcol); }));
+    }
+  });
+}
 function shipRowValues(l){
   const m=l.meta||{}; const st=shipStatus(m)[0];
   const invName = id => { const v=state.invoices.find(x=>x.id===id); return v?v.name:''; };
@@ -3927,32 +3966,35 @@ function printShipSchedule(){
   const rows = scheduleForExport();
   const filterLabel = shipFilter==='all' ? 'All options' : (state.options[shipFilter]?.name||'');
   const esc2 = s => esc(s??'');
+  const cols = shipPrintColsVisible();
+  const ncol = cols.length;
   const bodyRows = rows.map(l=>{
     if(l.isCategory){
-      return `<tr class="catband"><td colspan="19">${esc2(l.catLabel)} — ${esc2(l.optName)}</td></tr>`;
+      return `<tr class="catband"><td colspan="${ncol}">${esc2(l.catLabel)} — ${esc2(l.optName)}</td></tr>`;
     }
     if(l.isGroup){
-      return `<tr class="grp"><td colspan="19">▸ ${esc2(l.groupName)} <span style="font-weight:normal;color:#777">(${esc2(l.optName)} · ${esc2(l.kind)}s)</span></td></tr>`;
+      return `<tr class="grp"><td colspan="${ncol}">▸ ${esc2(l.groupName)} <span style="font-weight:normal;color:#777">(${esc2(l.optName)} · ${esc2(l.kind)}s)</span></td></tr>`;
     }
     const m=l.meta||{}; const st=shipStatus(m)[0];
-    const descCell = l.isAccessory ? `<td class="acc">↳ ${esc2(l.desc)}</td>` : `<td>${esc2(l.desc)}</td>`;
     const cat = l.isAccessory ? 'Accessory' : l.kind;
     const tUrl = trackingUrl(m.shipper, m.tracking);
     const trkCell = m.tracking ? (tUrl?`<a href="${esc(tUrl)}">${esc2(m.tracking)}</a>`:esc2(m.tracking)) : '';
-    return `<tr${l.isAccessory?' class="accrow"':''}>
-      <td>${esc2(l.optName)}</td><td>${esc2(cat)}</td><td>${esc2(l.type)}</td>
-      <td>${esc2(l.mfr)}</td>${descCell}<td class="mono">${esc2(l.part)}</td>
-      <td class="r">${l.qty}</td><td class="r">${money(numOr(l.sold,0))}</td><td>${st}</td>
-      <td>${esc2(m.po)}</td><td>${esc2(m.orderDate)}</td><td>${esc2(m.recvDate)}</td>
-      <td>${esc2(m.estShip)}</td><td>${esc2(m.shipDate)}</td><td>${esc2(m.shipper)}</td>
-      <td class="mono">${trkCell}</td><td>${esc2(m.delivery)}</td><td>${esc2(m.comments)}</td>
-      <td>${esc2((state.invoices.find(v=>v.id===m.invoiceId)||{}).name||'')}</td>
-    </tr>`;
+    const invName = (state.invoices.find(v=>v.id===m.invoiceId)||{}).name||'';
+    const cell = {
+      optName:{h:esc2(l.optName)}, cat:{h:esc2(cat)}, type:{h:esc2(l.type)}, mfr:{h:esc2(l.mfr)},
+      desc:{h:(l.isAccessory?'↳ ':'')+esc2(l.desc), cls:l.isAccessory?'acc':''},
+      part:{h:esc2(l.part),cls:'mono'}, qty:{h:l.qty,cls:'r'}, sold:{h:money(numOr(l.sold,0)),cls:'r'},
+      status:{h:st}, po:{h:esc2(m.po)}, orderDate:{h:esc2(m.orderDate)}, recvDate:{h:esc2(m.recvDate)},
+      estShip:{h:esc2(m.estShip)}, shipDate:{h:esc2(m.shipDate)}, shipper:{h:esc2(m.shipper)},
+      tracking:{h:trkCell,cls:'mono'}, delivery:{h:esc2(m.delivery)}, comments:{h:esc2(m.comments)}, invoice:{h:esc2(invName)}
+    };
+    const tds = cols.map(c=>{ const x=cell[c.key]||{h:''}; return `<td class="${x.cls||''}">${x.h}</td>`; }).join('');
+    return `<tr${l.isAccessory?' class="accrow"':''}>${tds}</tr>`;
   }).join('');
   const totalSold = rows.filter(l=>!l.isGroup && !l.isCategory).reduce((a,l)=>a+numOr(l.sold,0),0);
   const invRows = state.invoices.map(v=>`<tr><td>${esc2(v.name)}</td><td>${esc2(v.number)}</td>
     <td>${esc2(v.date)}</td><td>${esc2(v.status)}</td><td class="r">${money(invoiceTotal(v.id))}</td></tr>`).join('');
-  const headCells = SHIP_EXPORT_COLS.map(h=>`<th>${h}</th>`).join('');
+  const headCells = cols.map(c=>`<th>${c.label}</th>`).join('');
   const w = window.open('', '_blank');
   if(!w){ toast('Pop-up blocked — allow pop-ups to print'); return; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -4528,7 +4570,7 @@ function renderRecents(){
 
 /* Print / PDF — routes to the right output for the current view */
 function printEstimate(){
-  if(view === 'shipping'){ printShipSchedule(); return; }
+  if(view === 'shipping'){ openShipPrint(); return; }
   if(view === 'advice'){ printAdvices(); return; }
   /* Build a branded banner (company + project header) shown only on the printout. */
   const opt = state.options[state.current];
