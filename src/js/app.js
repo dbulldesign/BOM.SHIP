@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.22.0";
+const APP_VERSION = "1.23.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3236,7 +3236,7 @@ const SHIP_PRINT_COLS = [
   {key:'tracking',label:'Tracking'},{key:'delivery',label:'Delivery Date'},{key:'comments',label:'Comments'},
   {key:'invoice',label:'Invoice'}
 ];
-const SHIP_CLIENT_HIDDEN = ['sold','po','orderDate','recvDate','invoice'];   // the "Client" preset
+const SHIP_CLIENT_HIDDEN = ['optName','cat','sold','po','orderDate','recvDate','invoice'];   // the "Client" preset
 let shipPrintHidden = (()=>{ try{ const a=JSON.parse(localStorage.getItem('lbom_shipcols_v1')); return new Set(Array.isArray(a)?a:[]); }catch(e){ return new Set(); } })();
 function saveShipCols(){ try{ localStorage.setItem('lbom_shipcols_v1', JSON.stringify([...shipPrintHidden])); }catch(e){} }
 function shipPrintColsVisible(){ return SHIP_PRINT_COLS.filter(c=>!shipPrintHidden.has(c.key)); }
@@ -3552,7 +3552,6 @@ function printShipSchedule(){
       <b>Printed:</b> ${new Date().toLocaleDateString()}
     </div>
     <table><thead><tr>${headCells}</tr></thead><tbody>${bodyRows||'<tr><td colspan="19">No items</td></tr>'}</tbody></table>
-    <div class="sum">Total sold (this scope): ${money(totalSold)}</div>
     ${state.invoices.length?`<h2>Invoices</h2>
       <table><thead><tr><th>Invoice</th><th>Number</th><th>Date</th><th>Status</th><th class="r">Total</th></tr></thead>
       <tbody>${invRows}</tbody></table>`:''}
