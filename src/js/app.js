@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.30.0";
+const APP_VERSION = "1.31.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -784,7 +784,7 @@ function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); el
 
 /* Global display settings (local to this browser). */
 const SETTINGS_KEY = 'lbom_settings_v1';
-const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true };
+const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true, freezeCols:false };
 let uiSettings = loadSettings();
 function loadSettings(){ try{ return Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {...SETTINGS_DEFAULTS}; } }
 function saveSettings(){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(uiSettings)); }catch(e){} }
@@ -795,6 +795,7 @@ function applySettings(){
   b.classList.toggle('coltext-fit', uiSettings.colText!=='wrap');
   b.classList.toggle('density-compact', uiSettings.density==='compact');
   b.classList.toggle('sticky-head', uiSettings.stickyHead!==false);
+  b.classList.toggle('freeze-cols', !!uiSettings.freezeCols);
   const scale = Math.min(1.4, Math.max(0.8, numOr(uiSettings.textScale,1)));
   b.style.setProperty('--ui-scale', String(scale));
 }
@@ -803,6 +804,38 @@ function setShowSelect(on){ uiSettings.showSelect = !!on; saveSettings(); render
 function setDensity(mode){ uiSettings.density = (mode==='compact'?'compact':'comfortable'); saveSettings(); applySettings(); }
 function setTextScale(v){ uiSettings.textScale = Math.min(1.4, Math.max(0.8, numOr(v,1))); saveSettings(); applySettings(); }
 function setStickyHead(on){ uiSettings.stickyHead = !!on; saveSettings(); applySettings(); }
+function setFreezeCols(on){ uiSettings.freezeCols = !!on; saveSettings(); applySettings(); render(); }
+
+/* Freeze the left identifier columns (through Description) of the fixtures &
+   controls tables so they stay visible when scrolling wide tables horizontally.
+   Measures the live header widths and pins those cells with position:sticky. */
+function applyFreeze(){
+  if(!uiSettings.freezeCols) return;
+  const pane = document.getElementById('pane'); if(!pane) return;
+  pane.querySelectorAll('.section table').forEach(table=>{
+    const cols = table.querySelectorAll('colgroup col');
+    if(!cols.length) return;
+    let descIdx = -1;
+    cols.forEach((c,idx)=>{ if(c.getAttribute('data-col')==='desc') descIdx = idx; });
+    if(descIdx < 0) return;                         // services table etc. — no desc column, skip
+    const K = descIdx + 1;
+    const thead = table.tHead; if(!thead || !thead.rows.length) return;
+    const ths = thead.rows[0].cells; if(ths.length < K) return;
+    const lefts = []; let acc = 0;
+    for(let i=0;i<K;i++){ lefts[i] = acc; acc += ths[i].getBoundingClientRect().width; }
+    const pin = (cell,i,head)=>{
+      cell.classList.add('frz'); if(i===K-1) cell.classList.add('frz-edge');
+      cell.style.position = 'sticky'; cell.style.left = lefts[i]+'px';
+      cell.style.zIndex = head ? 6 : 2;
+    };
+    for(let i=0;i<K;i++) pin(ths[i], i, true);
+    const tb = table.tBodies[0]; if(!tb) return;
+    Array.prototype.forEach.call(tb.rows, tr=>{
+      if(tr.cells.length < K) return;               // colspan rows (section / add / acc-toggle) — skip
+      for(let i=0;i<K;i++) pin(tr.cells[i], i, false);
+    });
+  });
+}
 function openSettings(){
   const original = uiSettings.colText;                 // remembered so Cancel can revert
   const checked = m => uiSettings.colText===m ? 'checked' : '';
@@ -827,7 +860,9 @@ function openSettings(){
       <input type="range" id="setTextScale" min="0.8" max="1.4" step="0.05" value="${numOr(uiSettings.textScale,1)}" style="width:100%" aria-label="Text size">
     </div></div>
     <label class="set-opt"><input type="checkbox" id="setStickyHead" ${uiSettings.stickyHead!==false?'checked':''}>
-      <span><b>Sticky headers &amp; totals</b><br><span class="set-sub">Keep table headers and the grand-total row visible while scrolling.</span></span></label>`;
+      <span><b>Sticky headers &amp; totals</b><br><span class="set-sub">Keep table headers and the grand-total row visible while scrolling.</span></span></label>
+    <label class="set-opt"><input type="checkbox" id="setFreezeCols" ${uiSettings.freezeCols?'checked':''}>
+      <span><b>Freeze identifier columns</b><br><span class="set-sub">Pin the left columns (through <b>Description</b>) on the fixtures &amp; controls tables so they stay visible when scrolling right.</span></span></label>`;
   openModal({
     title:'Settings', bodyHTML:body, wide:false,
     cancelLabel:'Close', confirmLabel:'Accept',
@@ -854,6 +889,8 @@ function openSettings(){
       if(ts) ts.addEventListener('input', ()=>{ setTextScale(ts.value); if(tsl) tsl.textContent = Math.round(numOr(ts.value,1)*100)+'%'; dirtyUI(); });
       const sh = back.querySelector('#setStickyHead');
       if(sh) sh.addEventListener('change', ()=>{ setStickyHead(sh.checked); dirtyUI(); });
+      const fz = back.querySelector('#setFreezeCols');
+      if(fz) fz.addEventListener('change', ()=>{ setFreezeCols(fz.checked); dirtyUI(); });
     }
   });
 }
@@ -1580,6 +1617,7 @@ function renderPane(){
     ${opt.approved ? changeOrdersSection(opt) : ''}`;
   bindPane();
   lockBomInputs();
+  applyFreeze();
 }
 
 /* When an option is approved its base BOM is locked: every data field in the

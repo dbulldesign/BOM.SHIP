@@ -1002,16 +1002,30 @@
   body.density-compact .ship-table th{padding-top:3px;padding-bottom:3px}
   body.density-compact .acc-row td{padding-top:0;padding-bottom:0}
 
-  /* Sticky table headers + sticky grand-total row (toggle) */
-  body.sticky-head .table-scroll{position:relative}
-  body.sticky-head .section thead th,
-  body.sticky-head .ship-table thead th{position:sticky;top:0;z-index:4}
+  /* Sticky headers are on by default in the base CSS; the toggle DISABLES them.
+     Sticky grand-total row is new and only applies when the toggle is on. */
+  body:not(.sticky-head) .section thead th,
+  body:not(.sticky-head) .ship-table thead th{position:static}
   body.sticky-head .stamp{position:sticky;bottom:0;z-index:3;
     box-shadow:0 -6px 14px -8px rgba(0,0,0,.25)}
   body.dark.sticky-head .stamp{box-shadow:0 -6px 14px -8px rgba(0,0,0,.6)}
-  @media print{ body.sticky-head .section thead th,
-    body.sticky-head .ship-table thead th,
-    body.sticky-head .stamp{position:static;box-shadow:none} }
+  @media print{ body.sticky-head .stamp{position:static;box-shadow:none} }
+
+  /* Freeze first columns (toggle) — applied via JS (applyFreeze) which sets
+     position:sticky + left offsets; these rules give the frozen cells an opaque
+     background + a subtle right divider so scrolled content doesn't bleed under. */
+  td.frz{background:var(--sheet)}
+  tr.acc-row td.frz{background:#FAFAF7}
+  body.dark tr.acc-row td.frz{background:#1C1F28}
+  th.frz{background:var(--sheet)}
+  .frz-edge{box-shadow:inset -1px 0 0 var(--rule-dark), 2px 0 5px -3px rgba(0,0,0,.25)}
+  @media print{ .frz{position:static!important;left:auto!important;box-shadow:none!important} }
+
+  /* Repeated table headers + avoid splitting rows across printed pages */
+  @media print{
+    thead{display:table-header-group}
+    tr,.adv-tbl tr,.ship-table tr{page-break-inside:avoid}
+  }
 
   /* Segmented control (settings) */
   .seg{display:inline-flex;margin-top:6px;border:1px solid var(--rule-dark);border-radius:5px;overflow:hidden}
