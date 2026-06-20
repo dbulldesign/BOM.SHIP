@@ -1034,3 +1034,10 @@
   .seg-btn.on{background:var(--amber);color:#16181F;font-weight:600}
   .seg-btn:hover:not(.on){background:var(--amber-wash)}
   body.dark .seg-btn:hover:not(.on){background:#2A2310}
+
+  /* ===== Per-column filters ===== */
+  tr.col-filter-row th{padding:2px 4px;background:var(--paper);position:static!important}
+  .col-filter-in{width:100%;min-width:40px;font:inherit;font-size:.72rem;padding:2px 5px;
+    border:1px solid var(--rule-dark);border-radius:2px;background:var(--sheet);color:var(--ink)}
+  .col-filter-in:focus{outline:none;border-color:var(--amber);background:var(--amber-wash)}
+  body.dark .col-filter-in:focus{background:#2A2310}
