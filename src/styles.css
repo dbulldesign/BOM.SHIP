@@ -1067,3 +1067,13 @@
   .cmdk-label{font-weight:500}
   .cmdk-hint{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-left:12px;flex-shrink:0}
   .cmdk-empty{padding:18px 14px;color:var(--ink-soft);font-style:italic;text-align:center}
+
+  /* ===== Manual ship status ===== */
+  td.ustatus-cell select{min-width:96px}
+  .stm-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+  .stm-row{display:flex;align-items:center;gap:8px}
+  .stm-name{flex:1 1 auto;font:inherit;font-size:.86rem;padding:5px 8px;border:1px solid var(--rule-dark);border-radius:3px;background:var(--sheet);color:var(--ink)}
+  .stm-ph{font-size:.74rem;color:var(--ink-soft);display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .stm-mini{border:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);border-radius:3px;padding:3px 7px;font-size:.78rem;cursor:pointer}
+  .stm-mini[disabled]{opacity:.35;cursor:default}
+  .stm-del:hover{color:var(--danger);border-color:var(--danger)}
