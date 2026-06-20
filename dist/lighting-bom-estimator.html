@@ -936,6 +936,32 @@
     padding:10px 12px;border:1px solid var(--rule-dark);border-radius:4px;background:var(--sheet);color:var(--ink);
     resize:vertical;white-space:pre-wrap}
   .inv-email-txt:focus{outline:none;border-color:var(--amber)}
+
+  /* ===== Approved option: locked BOM (delete still allowed) ===== */
+  /* hide every "add / change" affordance; keep delete (.rowdel) and selection (.bom-check) */
+  .bom-locked .sec-add-bar,
+  .bom-locked .sec-add-row,
+  .bom-locked .acc-add-cell,
+  .bom-locked .acc-menu,
+  .bom-locked .rowact,
+  .bom-locked .drag-grip,
+  .bom-locked .col-resizer,
+  .bom-locked .bulk-grp,
+  .bom-locked .sec-markup{display:none !important}
+  .bom-locked .section input:disabled,
+  .bom-locked .section select:disabled,
+  .bom-locked .section textarea:disabled,
+  .bom-locked input[data-optname]:disabled{background:transparent;color:var(--ink);cursor:default;opacity:.85}
+  .bom-locked .opt-head{position:relative}
+
+  /* ===== Ship advice: per-item shipping fields ===== */
+  .adv-items-scroll{overflow-x:auto}
+  .adv-items-note{font-size:.72rem;color:var(--ink-soft);margin-left:10px;flex:1 1 auto}
+  .adv-item-in{width:100%;min-width:70px;border:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);
+    font-size:.78rem;padding:3px 5px;border-radius:2px}
+  .adv-item-in:focus{outline:none;border-color:var(--amber);background:var(--amber-wash)}
+  body.dark .adv-item-in:focus{background:#2A2310}
+  .adv-items-table th{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1066,7 +1092,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.24.0";
+const APP_VERSION = "1.25.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1775,7 +1801,7 @@ function bulkSet(field){
   markDirty(); render(); toast('Updated '+rows.length+' row'+(rows.length>1?'s':''));
 }
 function bulkDelete(){
-  if(!guardBaseEdit()) return;
+  /* deletion is allowed even on an approved (locked) option */
   const o = state.options[state.current];
   ['fixtures','controls'].forEach(k=>{ o[k] = (o[k]||[]).filter(r=> r.isSection || !bomSel.has(r.id)); });
   sanitizeLinks(o); bomSel.clear(); markDirty(); render(); toast('Deleted selected');
@@ -2315,6 +2341,9 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
   } else {
     const sorted = sortedRows(rows, kind);
     body = sorted.map(({r,i})=> fixtureRowHTML(r,i) + accessoryRowsHTML(r,i)).join("");
+    /* a quick add line at the bottom of the table (like the fixtures section) */
+    body += `<tr class="sec-add-row no-print"><td colspan="${NCOLS}">
+      <button class="acc-add-btn" onclick="addRow('${kind}')">+ Add ${allowAccessories?'fixture':'control'}</button></td></tr>`;
   }
 
   const dupBtn = allowAccessories
@@ -2504,9 +2533,8 @@ function renderPane(){
   const t = optionTotals(opt);
   const margin = t.sub>0 ? ((t.sub-t.cost)/t.sub*100) : 0;
   const approveBtn = opt.approved
-    ? `<span class="approved-badge" title="This option is approved">✓ Approved</span>
-       <button class="ghost lock-btn ${opt.baseLocked!==false?'locked':''}" onclick="toggleBaseLock()" title="${opt.baseLocked!==false?'Base is locked — click to unlock for editing':'Base is unlocked — click to lock'}">${opt.baseLocked!==false?'🔒 Locked':'🔓 Unlocked'}</button>
-       <button class="ghost" onclick="unapproveOption()">Unapprove</button>`
+    ? `<span class="approved-badge" title="This option is approved and locked. You can still delete entries; use a Change Order to add scope.">🔒 Approved (locked)</span>
+       <button class="ghost" onclick="unapproveOption()">Unapprove to edit</button>`
     : `<button class="ghost approve-btn" onclick="approveOption()">Approve option</button>`;
   document.getElementById("pane").innerHTML = `
     ${memoryDatalists()}
@@ -2556,6 +2584,22 @@ function renderPane(){
     </div>
     ${opt.approved ? changeOrdersSection(opt) : ''}`;
   bindPane();
+  lockBomInputs();
+}
+
+/* When an option is approved its base BOM is locked: every data field in the
+   fixtures / controls / services / allowance sections is disabled, and the
+   add / link / duplicate / drag affordances are hidden via the .bom-locked
+   class (CSS). Deleting entries and editing Change Orders stay available. */
+function lockBomInputs(){
+  const pane = document.getElementById('pane'); if(!pane) return;
+  const locked = !!(state.options[state.current]||{}).approved;
+  pane.classList.toggle('bom-locked', locked);
+  if(!locked) return;
+  /* disable data entry in the base sections — but keep selection checkboxes
+     (so rows can still be selected for deletion) usable */
+  pane.querySelectorAll('.section input:not(.bom-check), .section select, .section textarea').forEach(el=>{ el.disabled = true; });
+  const nm = pane.querySelector('input[data-optname]'); if(nm) nm.disabled = true;
 }
 
 /* Change Orders area — shown once an option is approved. Each CO is its own mini-BOM. */
@@ -2673,17 +2717,15 @@ function findCO(coId){
   for(const o of state.options){ const co=(o.changeOrders||[]).find(c=>c.id===coId); if(co) return {opt:o, co}; }
   return null;
 }
-function approveOption(){ const o=state.options[state.current]; o.approved = true; if(o.baseLocked===undefined) o.baseLocked = true; markDirty(); render(); toast('Option approved — base locked'); }
-function unapproveOption(){ state.options[state.current].approved = false; markDirty(); render(); }
-function toggleBaseLock(){ const o=state.options[state.current]; o.baseLocked = (o.baseLocked===false); markDirty(); render(); }
+function approveOption(){ const o=state.options[state.current]; o.approved = true; markDirty(); render(); toast('Option approved & locked — delete still works; add scope via a Change Order'); }
+function unapproveOption(){ state.options[state.current].approved = false; markDirty(); render(); toast('Option unapproved — editing re-enabled'); }
 /* Guard: when an approved option's base is locked, confirm before allowing a base edit.
    Returns true if the edit may proceed. */
-let _baseUnlockAck = false;   // session ack so we don't nag on every keystroke
+/* Approved options are fully locked for editing (the only changes allowed are
+   deletions, and Change Orders). */
 function baseEditAllowed(){
   const o = state.options[state.current];
-  if(!o.approved || o.baseLocked===false) return true;
-  if(_baseUnlockAck) return true;
-  return false;
+  return !(o && o.approved);
 }
 function addChangeOrder(){
   const opt = state.options[state.current];
@@ -3040,11 +3082,9 @@ function onPaneChange(e){
   /* fixture / control rows + their accessories (and section name) */
   if(d.k!==undefined){
     const {k,i,f,ai} = d;
-    if(!baseEditAllowed()){
-      el.value = el._focusVal!==undefined ? el._focusVal : '';   // revert visually
-      showConfirm('Edit approved base?', 'This option is approved and its base is locked to protect the agreed bid. Unlock the base to make changes? (Change orders are the usual way to add scope.)', 'Unlock base', 'primary').then(ok=>{
-        if(ok){ _baseUnlockAck = true; state.options[state.current].baseLocked = false; markDirty(); render(); toast('Base unlocked'); }
-      });
+    if(!baseEditAllowed()){               // approved & locked — inputs are disabled, but guard anyway
+      el.value = el._focusVal!==undefined ? el._focusVal : '';
+      toast('This option is approved & locked — Unapprove it to edit');
       return;
     }
     const arr = state.options[state.current][k];
@@ -3383,13 +3423,10 @@ function sanitizeLinks(opt){
   });
 }
 
-/* Guard inserts/edits into an approved+locked base. Returns true if allowed,
-   otherwise prompts to unlock and returns false. */
+/* Guard inserts/edits into an approved (locked) option. Deletions bypass this. */
 function guardBaseEdit(){
   if(baseEditAllowed()) return true;
-  showConfirm('Edit approved base?', 'This option is approved and its base is locked to protect the agreed bid. Unlock the base to add parts? (Change orders are the usual way to add scope.)', 'Unlock base', 'primary').then(ok=>{
-    if(ok){ _baseUnlockAck = true; state.options[state.current].baseLocked = false; markDirty(); render(); toast('Base unlocked'); }
-  });
+  toast('This option is approved & locked — Unapprove it, or add a Change Order, to make changes');
   return false;
 }
 
@@ -4721,7 +4758,19 @@ function blankAdvice(){
   return { id:uid(), shipmentName:nextShipmentName(), shipmentDate:"", estDelivery:"",
            via:"", tracking:"", addressId:null,
            attn:"", business:"", address:"", cityStateZip:"",
-           itemIds:[] };
+           itemIds:[], itemMeta:{} };
+}
+/* Per-item shipping detail on an advice: pallet #, box #, and optional per-item
+   shipper / tracking / est. ship / est. delivery (for tagging items to different
+   shipments). Stored as advice.itemMeta[rowId] = {pallet,box,via,tracking,estShip,estDelivery}. */
+function adviceItemMeta(a, rowId){
+  if(!a.itemMeta) a.itemMeta = {};
+  if(!a.itemMeta[rowId]) a.itemMeta[rowId] = {};
+  return a.itemMeta[rowId];
+}
+function setAdviceItemField(adviceId, rowId, k, v){
+  const a = (state.shipAdvices||[]).find(x=>x.id===adviceId); if(!a) return;
+  adviceItemMeta(a, rowId)[k] = v; markDirty();
 }
 function addAdvice(){
   if(!state.shipAdvices) state.shipAdvices=[];
@@ -4831,11 +4880,15 @@ function renderAdvice(){
     const addrOpts = `<option value="">— New / manual address —</option>` +
       savedAddrs.map(ad=>`<option value="${ad.id}" ${a.addressId===ad.id?'selected':''}>${esc(ad.label)}</option>`).join('');
 
-    /* line items table */
+    /* line items table — Qty/Cat/Type/Manuf/Part/Desc plus editable per-item
+       Pallet #, Box #, Shipper, Tracking #, Est. ship and Est. delivery. */
+    const COLSPAN = 13;
     const itemRows = (a.itemIds||[]).map(rowId=>{
       const l = adviceLineData(rowId);
-      if(!l) return `<tr><td colspan="6" class="dim">(item no longer in schedule)</td><td class="no-print"><button class="ship-rowdel" onclick="removeItemFromAdvice('${a.id}','${rowId}')">✕</button></td></tr>`;
+      if(!l) return `<tr><td colspan="${COLSPAN-1}" class="dim">(item no longer in schedule)</td><td class="no-print"><button class="ship-rowdel" onclick="removeItemFromAdvice('${a.id}','${rowId}')">✕</button></td></tr>`;
       const shipped = itemIsShipped(rowId);
+      const m = (a.itemMeta&&a.itemMeta[rowId])||{};
+      const fld = (k,ph,extra='') => `<input class="adv-item-in" value="${esc(m[k]||'')}" placeholder="${ph}" ${extra} onchange="setAdviceItemField('${a.id}','${rowId}','${k}',this.value)">`;
       return `<tr>
         <td class="r mono">${l.qty}</td>
         <td>${esc(l.kind)}</td>
@@ -4843,6 +4896,12 @@ function renderAdvice(){
         <td>${esc(l.mfr)}</td>
         <td class="mono">${esc(l.part)}</td>
         <td>${esc(l.desc)}${shipped?' <span class="adv-shipped">shipped</span>':''}</td>
+        <td>${fld('pallet','Pallet #')}</td>
+        <td>${fld('box','Box #')}</td>
+        <td>${fld('via','Shipper')}</td>
+        <td>${fld('tracking','Tracking #')}</td>
+        <td>${fld('estShip','mm/dd/yyyy')}</td>
+        <td>${fld('estDelivery','mm/dd/yyyy')}</td>
         <td class="no-print"><button class="ship-rowdel" title="Remove" onclick="removeItemFromAdvice('${a.id}','${rowId}')">✕</button></td>
       </tr>`;
     }).join('');
@@ -4905,11 +4964,13 @@ function renderAdvice(){
       <div class="adv-items">
         <div class="adv-items-head">
           <h3>Line items (${(a.itemIds||[]).length})</h3>
+          <span class="adv-items-note no-print">Fill in Pallet #/Box #, or tag items to different shippers, tracking #s &amp; dates. Blank columns are hidden on the printout.</span>
           <button class="ghost no-print" onclick="adviceAddPicker='${a.id}';renderAdvice()">+ Add from schedule</button>
         </div>
-        ${(a.itemIds||[]).length? `<table class="adv-items-table">
-          <thead><tr><th class="r">Qty</th><th>Cat.</th><th>Type</th><th>Manuf.</th><th>Part #</th><th>Description</th><th class="no-print"></th></tr></thead>
-          <tbody>${itemRows}</tbody></table>` : `<div class="adv-noitems">No items yet — add fixtures or controls that haven't shipped.</div>`}
+        ${(a.itemIds||[]).length? `<div class="adv-items-scroll"><table class="adv-items-table">
+          <thead><tr><th class="r">Qty</th><th>Cat.</th><th>Type</th><th>Manuf.</th><th>Part #</th><th>Description</th>
+            <th>Pallet #</th><th>Box #</th><th>Shipper</th><th>Tracking #</th><th>Est. ship</th><th>Est. delivery</th><th class="no-print"></th></tr></thead>
+          <tbody>${itemRows}</tbody></table></div>` : `<div class="adv-noitems">No items yet — add fixtures or controls that haven't shipped.</div>`}
         ${picker}
       </div>
     </div>`;
@@ -5262,30 +5323,46 @@ function printAdvices(){
   if(advices.length===0){ toast('No ship advices to print'); return; }
   const esc2 = s=>esc(s??'');
   const last = advices.length-1;
-  /* Minimum item rows so a sparse advice still looks like the template form. */
-  const MIN_ROWS = 8;
   const blocks = advices.map((a,ai)=>{
-    const ids = a.itemIds||[];
-    const itemRows = ids.map((rowId,i)=>{
-      const l = adviceLineData(rowId);
-      if(!l) return `<tr><td class="c">${i+1}</td><td colspan="9" class="dim">(item no longer in schedule)</td></tr>`;
-      return `<tr>
-        <td class="c">${i+1}</td>
-        <td class="c">${l.qty}</td>
-        <td>${esc2(l.type)}</td>
-        <td>${esc2(l.mfr)}</td>
-        <td class="mono">${esc2(l.part)}</td>
-        <td>${esc2(l.desc)}</td>
-        <td class="c"></td><td class="c"></td><td class="c"></td><td></td>
-      </tr>`;
-    }).join('');
-    /* pad with blank rows so the form keeps its shape */
-    let blanks='';
-    for(let i=ids.length;i<MIN_ROWS;i++){
-      blanks += `<tr class="blank"><td class="c dim">${i+1}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+    const meta = id => (a.itemMeta && a.itemMeta[id]) || {};
+    /* only items that still resolve to a schedule line are printed (no blank padding) */
+    const ids = (a.itemIds||[]).filter(id=>adviceLineData(id));
+
+    /* Optional columns appear only when there's something to show. */
+    const showPallet = ids.some(id=> String(meta(id).pallet||'').trim());
+    const showBox    = ids.some(id=> String(meta(id).box||'').trim());
+    const perItemShip = ids.some(id=>{ const m=meta(id); return String(m.via||m.tracking||m.estShip||m.estDelivery||'').trim(); });
+
+    /* Header Via / Tracking / Est delivery: "See Below" when items differ. */
+    const setOf = (k)=>{ const s=new Set(); ids.forEach(id=>{ const v=String(meta(id)[k]||a[k]||'').trim(); if(v) s.add(v); }); return s; };
+    const vias = setOf('via'), tracks = setOf('tracking'), dels = setOf('estDelivery');
+    const headVia = vias.size>1 ? 'See Below' : (a.via || [...vias][0] || '-');
+    const headTrk = (vias.size>1 || tracks.size>1) ? 'See Below' : (a.tracking || [...tracks][0] || '-');
+    const headDel = dels.size>1 ? 'See Below' : (a.estDelivery || [...dels][0] || '-');
+
+    /* Build the column set dynamically. */
+    const cols = [
+      {h:'QTY', c:true, v:l=>l.qty},
+      {h:'TYPE', v:l=>esc2(l.type)},
+      {h:'MANUF.', v:l=>esc2(l.mfr)},
+      {h:'PART NUMBER', cls:'mono', v:l=>esc2(l.part)},
+      {h:'DESCRIPTION', v:l=>esc2(l.desc)},
+    ];
+    if(showPallet) cols.push({h:'PALLET #', c:true, v:(l,m)=>esc2(m.pallet)});
+    if(showBox)    cols.push({h:'BOX #', c:true, v:(l,m)=>esc2(m.box)});
+    if(perItemShip){
+      cols.push({h:'SHIPPER', v:(l,m)=>esc2(m.via||a.via)});
+      cols.push({h:'TRACKING #', cls:'mono', v:(l,m)=>esc2(m.tracking||a.tracking)});
+      cols.push({h:'EST DELIVERY', c:true, v:(l,m)=>esc2(m.estDelivery||a.estDelivery)});
     }
-    const tUrl = trackingUrl(a.via, a.tracking);
-    const trk = a.tracking ? (tUrl?`<a href="${esc(tUrl)}">${esc2(a.tracking)}</a>`:esc2(a.tracking)) : '-';
+    cols.push({h:'SHIPPING NOTES', v:()=>''});   // blank, fillable by hand
+
+    const headCells = cols.map(c=>`<th${c.c?' class="c"':''}>${c.h}</th>`).join('');
+    const bodyRows = ids.length ? ids.map(id=>{
+      const l = adviceLineData(id), m = meta(id);
+      return `<tr>${cols.map(c=>`<td class="${c.cls||''}${c.c?' c':''}">${c.v(l,m)??''}</td>`).join('')}</tr>`;
+    }).join('') : `<tr><td colspan="${cols.length}" class="dim">No items on this advice</td></tr>`;
+
     return `<section class="adv-page${ai===last?'':' brk'}">
       <header class="adv-top">
         <div class="adv-logo">${logoImg()}</div>
@@ -5304,19 +5381,15 @@ function printAdvices(){
           <div>${esc2(a.cityStateZip)||'<span class="ph">City, State Zip</span>'}</div>
         </div>
         <table class="adv-meta">
-          <tr><th>SHIPMENT NAME / #</th><td>${esc2(a.shipmentName)||'-'}</td><th>VIA</th><td>${esc2(a.via)||'-'}</td></tr>
-          <tr><th>SHIPMENT DATE</th><td>${esc2(a.shipmentDate)||'-'}</td><th>TRACKING #</th><td>${trk}</td></tr>
-          <tr><th>EST DELIVERY DATE</th><td>${esc2(a.estDelivery)||'-'}</td><th></th><td></td></tr>
+          <tr><th>SHIPMENT NAME / #</th><td>${esc2(a.shipmentName)||'-'}</td><th>VIA</th><td>${esc2(headVia)}</td></tr>
+          <tr><th>SHIPMENT DATE</th><td>${esc2(a.shipmentDate)||'-'}</td><th>TRACKING #</th><td>${esc2(headTrk)}</td></tr>
+          <tr><th>EST DELIVERY DATE</th><td>${esc2(headDel)}</td><th></th><td></td></tr>
         </table>
       </div>
 
       <table class="adv-tbl">
-        <thead><tr>
-          <th class="c">Ref #</th><th class="c">QTY</th><th>TYPE</th><th>MANUF.</th>
-          <th>PART NUMBER</th><th>DESCRIPTION</th><th class="c">TOTAL QTY</th>
-          <th class="c">PALLET #</th><th class="c">BOX #</th><th>SHIPPING NOTES</th>
-        </tr></thead>
-        <tbody>${itemRows}${blanks}</tbody>
+        <thead><tr>${headCells}</tr></thead>
+        <tbody>${bodyRows}</tbody>
       </table>
 
       <div class="adv-notes">

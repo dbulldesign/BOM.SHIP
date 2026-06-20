@@ -929,3 +929,29 @@
     padding:10px 12px;border:1px solid var(--rule-dark);border-radius:4px;background:var(--sheet);color:var(--ink);
     resize:vertical;white-space:pre-wrap}
   .inv-email-txt:focus{outline:none;border-color:var(--amber)}
+
+  /* ===== Approved option: locked BOM (delete still allowed) ===== */
+  /* hide every "add / change" affordance; keep delete (.rowdel) and selection (.bom-check) */
+  .bom-locked .sec-add-bar,
+  .bom-locked .sec-add-row,
+  .bom-locked .acc-add-cell,
+  .bom-locked .acc-menu,
+  .bom-locked .rowact,
+  .bom-locked .drag-grip,
+  .bom-locked .col-resizer,
+  .bom-locked .bulk-grp,
+  .bom-locked .sec-markup{display:none !important}
+  .bom-locked .section input:disabled,
+  .bom-locked .section select:disabled,
+  .bom-locked .section textarea:disabled,
+  .bom-locked input[data-optname]:disabled{background:transparent;color:var(--ink);cursor:default;opacity:.85}
+  .bom-locked .opt-head{position:relative}
+
+  /* ===== Ship advice: per-item shipping fields ===== */
+  .adv-items-scroll{overflow-x:auto}
+  .adv-items-note{font-size:.72rem;color:var(--ink-soft);margin-left:10px;flex:1 1 auto}
+  .adv-item-in{width:100%;min-width:70px;border:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);
+    font-size:.78rem;padding:3px 5px;border-radius:2px}
+  .adv-item-in:focus{outline:none;border-color:var(--amber);background:var(--amber-wash)}
+  body.dark .adv-item-in:focus{background:#2A2310}
+  .adv-items-table th{white-space:nowrap}
