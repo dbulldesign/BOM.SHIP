@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.17.0";
+const APP_VERSION = "1.18.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3878,61 +3878,122 @@ function printEstimate(){
   setTimeout(()=>{ try{ window.print(); }catch(e){ toast('Use your browser menu → Print'); } }, 60);
 }
 
-/* Printable Ship Advices */
+/* Printable Ship Advices — laid out to match the Shipping Schedule template's
+   "Ship Log" page-1 Ship Advice print view (one advice per page). */
 function printAdvices(){
   const advices = state.shipAdvices||[];
   if(advices.length===0){ toast('No ship advices to print'); return; }
   const esc2 = s=>esc(s??'');
-  const blocks = advices.map(a=>{
-    const items = (a.itemIds||[]).map(rowId=>{
+  const last = advices.length-1;
+  /* Minimum item rows so a sparse advice still looks like the template form. */
+  const MIN_ROWS = 8;
+  const blocks = advices.map((a,ai)=>{
+    const ids = a.itemIds||[];
+    const itemRows = ids.map((rowId,i)=>{
       const l = adviceLineData(rowId);
-      if(!l) return '';
-      return `<tr><td class="r">${l.qty}</td><td>${esc2(l.kind)}</td><td>${esc2(l.type)}</td>
-        <td>${esc2(l.mfr)}</td><td class="mono">${esc2(l.part)}</td><td>${esc2(l.desc)}</td></tr>`;
+      if(!l) return `<tr><td class="c">${i+1}</td><td colspan="9" class="dim">(item no longer in schedule)</td></tr>`;
+      return `<tr>
+        <td class="c">${i+1}</td>
+        <td class="c">${l.qty}</td>
+        <td>${esc2(l.type)}</td>
+        <td>${esc2(l.mfr)}</td>
+        <td class="mono">${esc2(l.part)}</td>
+        <td>${esc2(l.desc)}</td>
+        <td class="c"></td><td class="c"></td><td class="c"></td><td></td>
+      </tr>`;
     }).join('');
+    /* pad with blank rows so the form keeps its shape */
+    let blanks='';
+    for(let i=ids.length;i<MIN_ROWS;i++){
+      blanks += `<tr class="blank"><td class="c dim">${i+1}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+    }
     const tUrl = trackingUrl(a.via, a.tracking);
-    const trk = a.tracking ? ('Tracking: '+(tUrl?`<a href="${esc(tUrl)}">${esc2(a.tracking)}</a>`:esc2(a.tracking))) : '';
-    return `<div class="adv">
-      <div class="advhead"><div class="sn">${esc2(a.shipmentName)}</div>
-        <div class="trk">${trk}</div></div>
-      <div class="addr">
-        <div>${esc2(a.attn)}</div><div><b>${esc2(a.business)}</b></div>
-        <div>${esc2(a.address)}</div><div>${esc2(a.cityStateZip)}</div>
+    const trk = a.tracking ? (tUrl?`<a href="${esc(tUrl)}">${esc2(a.tracking)}</a>`:esc2(a.tracking)) : '-';
+    return `<section class="adv-page${ai===last?'':' brk'}">
+      <header class="adv-top">
+        <div class="adv-logo">${logoImg()}</div>
+        <div class="adv-title">
+          <div class="adv-proj">${esc2(state.name||'Project Name Here')}</div>
+          <div class="adv-sub">Ship Advice</div>
+        </div>
+        <div class="adv-job">${esc2(state.jobCode||'')}</div>
+      </header>
+
+      <div class="adv-info">
+        <div class="adv-shipto">
+          <div class="ai-attn">${esc2(a.attn)||'<span class="ph">Attn Line</span>'}</div>
+          <div class="ai-biz">${esc2(a.business)||'<span class="ph">Business Name / Firm</span>'}</div>
+          <div>${esc2(a.address)||'<span class="ph">Delivery Address</span>'}</div>
+          <div>${esc2(a.cityStateZip)||'<span class="ph">City, State Zip</span>'}</div>
+        </div>
+        <table class="adv-meta">
+          <tr><th>SHIPMENT NAME / #</th><td>${esc2(a.shipmentName)||'-'}</td><th>VIA</th><td>${esc2(a.via)||'-'}</td></tr>
+          <tr><th>SHIPMENT DATE</th><td>${esc2(a.shipmentDate)||'-'}</td><th>TRACKING #</th><td>${trk}</td></tr>
+          <tr><th>EST DELIVERY DATE</th><td>${esc2(a.estDelivery)||'-'}</td><th></th><td></td></tr>
+        </table>
       </div>
-      <div class="meta">Ship date: ${esc2(a.shipmentDate||'—')} &nbsp;·&nbsp; Est. delivery: ${esc2(a.estDelivery||'—')} &nbsp;·&nbsp; Via: ${esc2(a.via||'—')}</div>
-      ${items? `<table><thead><tr><th class="r">Qty</th><th>Cat.</th><th>Type</th><th>Manuf.</th><th>Part #</th><th>Description</th></tr></thead><tbody>${items}</tbody></table>`
-        : '<div class="noitems">No items</div>'}
-    </div>`;
+
+      <table class="adv-tbl">
+        <thead><tr>
+          <th class="c">Ref #</th><th class="c">QTY</th><th>TYPE</th><th>MANUF.</th>
+          <th>PART NUMBER</th><th>DESCRIPTION</th><th class="c">TOTAL QTY</th>
+          <th class="c">PALLET #</th><th class="c">BOX #</th><th>SHIPPING NOTES</th>
+        </tr></thead>
+        <tbody>${itemRows}${blanks}</tbody>
+      </table>
+
+      <div class="adv-notes">
+        <div class="an-head">SHIPMENT NOTES</div>
+        <div class="an-body">Discrepancies, and any externally visible damage or defects to the pallets and/or cartons must be reported within (3) business days.</div>
+      </div>
+
+      <div class="adv-sign">Received By <span class="sl"></span> &nbsp;&nbsp; Date <span class="sl short"></span></div>
+    </section>`;
   }).join('');
   const w = window.open('', '_blank');
   if(!w){ toast('Pop-up blocked — allow pop-ups to print'); return; }
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc2(state.name||'Project')} — Ship Advices</title>
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc2(state.name||'Project')} — Ship Advice</title>
     <style>
-      body{font-family:Arial,Helvetica,sans-serif;color:#20242C;margin:24px;font-size:11px}
-      h1{font-size:16px;margin:0 0 14px}
-      .adv{border:2px solid #20242C;border-radius:4px;margin-bottom:18px;padding:0;page-break-inside:avoid}
-      .advhead{display:flex;justify-content:space-between;background:#20242C;color:#fff;padding:8px 12px}
-      .sn{font-weight:bold;font-family:'Courier New',monospace;font-size:13px}
-      .addr{padding:10px 12px;border-bottom:1px solid #ddd;line-height:1.5}
-      .meta{padding:8px 12px;color:#555;border-bottom:1px solid #ddd}
-      table{width:100%;border-collapse:collapse}
-      th{background:#f0eee8;font-size:9px;letter-spacing:.04em;text-transform:uppercase;text-align:left;padding:5px 8px;border-bottom:1px solid #ccc}
-      th.r,td.r{text-align:right}
-      td{padding:5px 8px;border-bottom:1px solid #eee}
+      *{box-sizing:border-box}
+      body{font-family:Arial,Helvetica,sans-serif;color:#20242C;margin:0;font-size:10px}
+      .adv-page{padding:14mm 12mm}
+      .adv-page.brk{page-break-after:always}
+      .adv-top{display:flex;align-items:center;gap:16px;border-bottom:2px solid #20242C;padding-bottom:8px}
+      .adv-logo{flex:0 0 auto}
+      .adv-logo img{height:42px;width:auto;display:block}
+      .adv-title{flex:1 1 auto;text-align:center}
+      .adv-proj{font-size:15px;font-weight:bold}
+      .adv-sub{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#444;margin-top:2px}
+      .adv-job{flex:0 0 auto;font-size:13px;font-weight:bold;font-family:'Courier New',monospace}
+      .adv-info{display:flex;gap:18px;margin:12px 0 10px;align-items:flex-start}
+      .adv-shipto{flex:1 1 40%;line-height:1.55;padding:8px 10px;border:1px solid #bbb;min-height:78px}
+      .adv-shipto .ai-attn{font-weight:bold}
+      .adv-shipto .ai-biz{font-weight:bold}
+      .adv-shipto .ph{color:#aaa;font-weight:normal;font-style:italic}
+      .adv-meta{flex:1 1 60%;border-collapse:collapse}
+      .adv-meta th{background:#20242C;color:#fff;font-size:8px;letter-spacing:.04em;text-align:left;
+        padding:4px 6px;white-space:nowrap;font-weight:bold;border:1px solid #20242C}
+      .adv-meta td{border:1px solid #bbb;padding:4px 8px;font-size:10px}
+      .adv-tbl{width:100%;border-collapse:collapse;margin-top:4px}
+      .adv-tbl th{background:#20242C;color:#fff;font-size:8px;letter-spacing:.03em;text-transform:uppercase;
+        text-align:left;padding:5px 6px;border:1px solid #20242C}
+      .adv-tbl td{border:1px solid #ccc;padding:4px 6px;font-size:10px;vertical-align:top;height:20px}
+      .adv-tbl .c,.adv-tbl th.c{text-align:center}
+      .adv-tbl tr.blank td{color:#bbb}
       .mono{font-family:'Courier New',monospace}
-      .noitems{padding:12px;color:#888;font-style:italic}
+      .dim{color:#999;font-style:italic}
+      .adv-notes{margin-top:12px;border:1px solid #bbb}
+      .an-head{background:#20242C;color:#fff;font-weight:bold;font-size:9px;letter-spacing:.06em;padding:4px 8px}
+      .an-body{padding:8px 10px;line-height:1.45;font-size:9.5px}
+      .adv-sign{margin-top:22px;font-size:11px}
+      .adv-sign .sl{display:inline-block;border-bottom:1px solid #20242C;width:230px;height:1px;vertical-align:bottom}
+      .adv-sign .sl.short{width:150px}
       a{color:#1558b0;text-decoration:underline}
-      .advhead .trk a{color:#fff}
-      .dochead{display:flex;align-items:center;gap:14px;margin:0 0 14px}
-      .doclogo{height:46px;width:auto;display:block}
-      .dochead h1{margin:0}
-      @media print{body{margin:8mm}}
-    </style></head><body>
-    <div class="dochead">${logoImg()}<h1>${esc2(state.name||'Project')}${state.jobCode?(' ('+esc2(state.jobCode)+')'):''} — Ship Advices</h1></div>
-    ${blocks}</body></html>`);
+      @media print{.adv-page{padding:0}@page{margin:12mm}}
+    </style></head><body>${blocks}</body></html>`);
   w.document.close();
   setTimeout(()=>{ w.focus(); w.print(); }, 350);
-  toast('Opening printable ship advices…');
+  toast('Opening printable ship advice…');
 }
 
 function exportCSV(){
