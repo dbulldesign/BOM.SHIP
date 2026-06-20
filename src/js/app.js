@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.18.0";
+const APP_VERSION = "1.19.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -252,7 +252,7 @@ let state = blankProject();
 let dirty = false;
 let lastSavedAt = null;     // timestamp of last successful file save
 let lastChangeAt = null;    // timestamp of last edit
-function markDirty(){ dirty = true; lastChangeAt = Date.now(); scheduleAutosave(); scheduleHistory(); updateSaveStamp(); }
+function markDirty(){ dirty = true; lastChangeAt = Date.now(); invalidateTotals(); scheduleAutosave(); scheduleHistory(); updateSaveStamp(); }
 
 /* ================= Undo / Redo =================
  * Snapshot-based history. Every committed change funnels through markDirty(), so
@@ -372,7 +372,16 @@ function showBackups(){
   document.getElementById('backupsBackdrop').style.display = 'flex';
 }
 function hideBackups(){ document.getElementById('backupsBackdrop').style.display = 'none'; }
+/* Coalesce the save-stamp refresh: markDirty() fires on every keystroke, and the
+   refresh reads + parses localStorage (getAutosaves). Batching to one update per
+   animation frame keeps fast typing cheap. */
+let _saveStampRAF = null;
 function updateSaveStamp(){
+  if(typeof requestAnimationFrame !== 'function'){ _updateSaveStampNow(); return; }
+  if(_saveStampRAF) return;
+  _saveStampRAF = requestAnimationFrame(()=>{ _saveStampRAF = null; _updateSaveStampNow(); });
+}
+function _updateSaveStampNow(){
   const el = document.getElementById('saveStamp');
   if(!el) return;
   let txt = "", cls = "save-stamp";
@@ -516,8 +525,27 @@ function allowanceFreight(opt){
     ctrlAllowCost, ctrlAllowSell: ovr(opt.ctrlAllowSellOv, Math.ceil(ctrlAllowCost*cMk))
   };
 }
+/* ---- Totals memoization ----
+   optionTotals() is called many times per render (once per tab, again in the
+   pane, again in the compare panel). The numbers only change when the project
+   is edited, so we cache results and invalidate on every committed change via
+   _totalsEpoch (bumped in markDirty and at the start of each render). Caches are
+   keyed by object identity, so undo/redo/open — which build fresh objects — get
+   fresh results automatically. */
+let _totalsEpoch = 0;
+function invalidateTotals(){ _totalsEpoch++; }
+const _bomTotalsCache = new WeakMap();
+const _optTotalsCache = new WeakMap();
+
 /* Core BOM totals for any option-shaped object (option OR change order). */
 function bomTotals(obj){
+  const hit = _bomTotalsCache.get(obj);
+  if(hit && hit.epoch===_totalsEpoch) return hit.val;
+  const val = computeBomTotals(obj);
+  _bomTotalsCache.set(obj, {epoch:_totalsEpoch, val});
+  return val;
+}
+function computeBomTotals(obj){
   const f=sectionTotals(obj.fixtures||[],obj.fixtureMarkup), c=sectionTotals(obj.controls||[],obj.controlMarkup);
   const s=servicesTotals(obj.services||[], obj.serviceMarkup!=null?obj.serviceMarkup:obj.fixtureMarkup);
   const af=allowanceFreight(obj);
@@ -534,6 +562,13 @@ function coCountsInTotals(co){
   return true;
 }
 function optionTotals(opt){
+  const hit = _optTotalsCache.get(opt);
+  if(hit && hit.epoch===_totalsEpoch && hit.cf===coTotalsFilter && hit.tax===state.taxRate) return hit.val;
+  const val = computeOptionTotals(opt);
+  _optTotalsCache.set(opt, {epoch:_totalsEpoch, cf:coTotalsFilter, tax:state.taxRate, val});
+  return val;
+}
+function computeOptionTotals(opt){
   const base = bomTotals(opt);
   /* change-order rollups — every CO shown, but only filtered ones add to the total */
   const cos = (opt.changeOrders||[]).map(co=>({ co, t:bomTotals(co), counts:coCountsInTotals(co) }));
@@ -929,6 +964,10 @@ function updateTaxDisplays(){
 }
 
 function render(){
+  /* Fresh epoch each render: totals computed once per option this pass and reused
+     across the tabs, pane, and compare panel — but never stale, since any edit
+     that changed them also triggered this render. */
+  invalidateTotals();
   const _focus = captureFocus();
   /* title block — shared across views.
      Don't overwrite an input the user is actively typing in (would strip a trailing "."). */
@@ -1737,167 +1776,168 @@ function renderCompare(){
 }
 
 /* ================= Event binding (delegated per render) ================= */
+/* Pane editing uses event delegation: instead of attaching listeners to every
+   input on each render (O(rows) work + memory that churned on every keystroke
+   commit), we attach three listeners ONCE to the stable #pane element. The pane's
+   innerHTML is replaced each render, but #pane itself persists, so these delegated
+   handlers keep working without re-binding. */
+let _paneDelegated = false;
 function bindPane(){
   const pane = document.getElementById("pane");
-  pane.querySelectorAll("input[data-k], select[data-k], textarea[data-k]").forEach(inp=>{
-    inp.addEventListener("change", e=>{
-      const {k,i,f,ai} = e.target.dataset;
-      /* base lock: if this option is approved & locked, confirm before editing base lines */
-      if(!baseEditAllowed()){
-        const oldVal = e.target._focusVal!==undefined ? e.target._focusVal : '';
-        e.target.value = oldVal;   // revert visually
-        showConfirm('Edit approved base?', 'This option is approved and its base is locked to protect the agreed bid. Unlock the base to make changes? (Change orders are the usual way to add scope.)', 'Unlock base', 'primary').then(ok=>{
-          if(ok){ _baseUnlockAck = true; state.options[state.current].baseLocked = false; markDirty(); render(); toast('Base unlocked'); }
-        });
-        return;
-      }
-      const arr = state.options[state.current][k];
-      const row = arr[i];
-      const val = e.target.value;
-      if(f==="sectionname"){ row.name = val || "Section"; markDirty(); render(); return; }
-      /* accessory fields (ai present) */
-      if(ai!==undefined){
-        const a = row.accessories[ai];
-        if(f==="accqty")        a.qty = val.trim()===""? null : Math.max(0,numOr(val,0));
-        else if(f==="accunitCost") a.unitCost = numOr(val,0);
-        else if(f==="accmfrMult") a.mfrMult = numOr(val,1);
-        else if(f==="accdesc"){ a.desc = val; rememberValue('desc', val); }
-        else if(f==="accpart")  a.part = val;
-        else if(f==="accmfr"){  a.mfr = val; rememberValue('mfr', val); }
-        else if(f==="accnote")  a.note = val;
-        else if(f==="accsource") a.source = val;
-        else if(f==="accmarkup") a.markup = parseMarkup(val);
-        markDirty(); render(); return;
-      }
-      /* normal fixture/control row */
-      if(f==="qty")     row.qty = Math.max(0, numOr(val,0));
-      else if(f==="unitCost"){ row.unitCost = numOr(val,0);
-        if(row.linkId && row.linkMaster) linkMembers(row.linkId).forEach(x=>{ x.r.unitCost = row.unitCost; }); }
-      else if(f==="mfrMult")  row.mfrMult = numOr(val,1);
-      else if(f==="markup")   row.markup = parseMarkup(val);
-      else if(f==="note")     row.note = val;
-      else if(f==="source")   row.source = val;
-      else if(f==="type"){    row.type = val.toUpperCase(); rememberValue('type', row.type); }
-      else if(f==="mfr"){     row.mfr = val; rememberValue('mfr', val); }
-      else if(f==="desc"){    row.desc = val; rememberValue('desc', val); }
-      else if(f==="tag"){     row.tag = val; rememberTag(val); }
-      else row[f] = val;
-      markDirty(); render();
-    });
-    inp.addEventListener("focus", e=>{ e.target._focusVal = e.target.value; });
-    inp.addEventListener("keydown", e=>{
-      if(e.key==="Enter"){
-        if(e.target.tagName==="TEXTAREA"){ if(e.shiftKey) return; e.preventDefault(); }   // keep wrap fields single-logical-line
-        const {k,i,ai} = e.target.dataset;
-        const arr = state.options[state.current][k];
-        if(ai===undefined && parseInt(i)===arr.length-1 && !arr[i].isSection){ e.target.blur(); addRow(k); }
-        else e.target.blur();
-      } else if(e.key==="Tab"){
-        /* If the value is unchanged, no re-render will fire — let the browser handle
-           Tab natively. Only manage focus across the re-render when an edit occurred. */
-        if(e.target.value === e.target._focusVal) return;
-        const fields = paneTabbables();
-        const idx = fields.indexOf(e.target);
-        if(idx!==-1){
-          const nextIdx = e.shiftKey ? idx-1 : idx+1;
-          if(nextIdx>=0 && nextIdx<fields.length){
-            e.preventDefault();
-            _pendingTabIndex = nextIdx;
-            e.target.blur();   // fires change -> render -> restores focus to _pendingTabIndex
-          }
-        }
-      }
-    });
-  });
-  /* section default markup — single field, percent or decimal */
-  pane.querySelectorAll("input[data-secmk]").forEach(inp=>{
-    inp.addEventListener("change", e=>{
-      const k = e.target.dataset.secmk;
-      const v = parseMarkup(e.target.value); if(v===null) return;
-      state.options[state.current][k==="fixtures"?"fixtureMarkup":"controlMarkup"] = v;
-      markDirty(); render();
-    });
-  });
-  /* services bindings (inputs and selects) */
-  pane.querySelectorAll("[data-svc-g]").forEach(inp=>{
-    inp.addEventListener("change", e=>{
-      const gi=+e.target.dataset.svcG, si=+e.target.dataset.svcR, f=e.target.dataset.f;
-      const ai=e.target.dataset.svcA;
-      const s = state.options[state.current].services[gi].rows[si];
-      const val = e.target.value;
-      if(ai!==undefined){                                  // add-on field
-        const a = s.addons[+ai];
-        if(f==="addonqty") a.qty = val.trim()===""? null : Math.max(0,numOr(val,0));
-        else if(f==="addonsellRate") a.sellRate = numOr(val,0);
-        else if(f==="addondesc") a.desc = val;
-        else if(f==="addonsource") a.source = val;
-        else if(f==="addonnote") a.note = val;
-        markDirty(); render(); return;
-      }
-      if(f==="qty") s.qty = Math.max(0,numOr(val,0));
-      else if(f==="sellRate") s.sellRate = numOr(val,0);
-      else if(f==="unit"){ s.unit = val; }                 // changing unit may change which add-ons apply
-      else s[f] = val;
-      markDirty(); render();
-    });
-  });
-  pane.querySelectorAll("input[data-svc-gname]").forEach(inp=>{
-    inp.addEventListener("change", e=>{ state.options[state.current].services[+e.target.dataset.svcGname].name = e.target.value||"Services"; markDirty(); render(); });
-  });
-
-  /* For Access allowance / freight percentages */
-  pane.querySelectorAll("input[data-fapct]").forEach(inp=>{
-    inp.addEventListener("change", e=>{
-      state.options[state.current][e.target.dataset.fapct] = Math.max(0, numOr(e.target.value,0));
-      markDirty(); render();
-    });
-  });
-  /* Allowance / Freight manual overrides (cost or sell). Blank = use the % formula. */
-  pane.querySelectorAll("input[data-afov]").forEach(inp=>{
-    inp.addEventListener("change", e=>{
-      const v = e.target.value.trim();
-      state.options[state.current][e.target.dataset.afov] = (v===''? null : Math.max(0, numOr(v,0)));
-      markDirty(); render();
-    });
-  });
-
-  const nameInp = pane.querySelector("input[data-optname]");
-  nameInp.addEventListener("change", e=>{ state.options[state.current].name = e.target.value || "Option"; markDirty(); render(); });
-  const taxInp = pane.querySelector("input[data-stamptax]");
-  if(taxInp) taxInp.addEventListener("change", e=>{ state.taxRate = numOr(e.target.value,0); markDirty(); render(); });
-
-  /* ---- Change order bindings ---- */
-  pane.querySelectorAll("[data-cofield]").forEach(inp=>{
-    inp.addEventListener("change", e=>{ setCOField(e.target.dataset.co, e.target.dataset.cofield, e.target.value); });
-  });
-  pane.querySelectorAll("[data-cof]").forEach(inp=>{
-    inp.addEventListener("change", e=>{
-      const f=findCO(e.target.dataset.co); if(!f) return;
-      const row=f.co[e.target.dataset.cok][+e.target.dataset.coi];
-      const field=e.target.dataset.cof, val=e.target.value;
-      if(field==='qty') row.qty=Math.max(0,numOr(val,0));
-      else if(field==='unitCost') row.unitCost=numOr(val,0);
-      else if(field==='markup') row.markup=parseMarkup(val);
-      else if(field==='type') row.type=val.toUpperCase();
-      else row[field]=val;
-      markDirty(); render();
-    });
-  });
-  pane.querySelectorAll("[data-cosf]").forEach(inp=>{
-    inp.addEventListener("change", e=>{
-      const f=findCO(e.target.dataset.co); if(!f) return;
-      const s=f.co.services[+e.target.dataset.cosvcg].rows[+e.target.dataset.cosvcr];
-      const field=e.target.dataset.cosf, val=e.target.value;
-      if(field==='qty') s.qty=Math.max(0,numOr(val,0));
-      else if(field==='sellRate') s.sellRate=numOr(val,0);
-      else s[field]=val;
-      markDirty(); render();
-    });
-  });
-  pane.querySelectorAll("[data-cosvcgname]").forEach(inp=>{
-    inp.addEventListener("change", e=>{ const f=findCO(e.target.dataset.co); if(f){ f.co.services[+e.target.dataset.cosvcgname].name=e.target.value||'Services'; markDirty(); render(); } });
-  });
+  if(!_paneDelegated){
+    pane.addEventListener("change", onPaneChange);
+    pane.addEventListener("focusin", e=>{ const t=e.target; if(t && 'value' in t) t._focusVal = t.value; });
+    pane.addEventListener("keydown", onPaneKeydown);
+    _paneDelegated = true;
+  }
   bindTableInteractions(pane);
+}
+
+/* Delegated change dispatcher — routes to the right state mutation by the data-*
+   attribute on the edited control. Mirrors the per-field handlers exactly. */
+function onPaneChange(e){
+  const el = e.target; if(!el || !el.dataset) return;
+  const d = el.dataset;
+
+  /* fixture / control rows + their accessories (and section name) */
+  if(d.k!==undefined){
+    const {k,i,f,ai} = d;
+    if(!baseEditAllowed()){
+      el.value = el._focusVal!==undefined ? el._focusVal : '';   // revert visually
+      showConfirm('Edit approved base?', 'This option is approved and its base is locked to protect the agreed bid. Unlock the base to make changes? (Change orders are the usual way to add scope.)', 'Unlock base', 'primary').then(ok=>{
+        if(ok){ _baseUnlockAck = true; state.options[state.current].baseLocked = false; markDirty(); render(); toast('Base unlocked'); }
+      });
+      return;
+    }
+    const arr = state.options[state.current][k];
+    const row = arr[i];
+    const val = el.value;
+    if(f==="sectionname"){ row.name = val || "Section"; markDirty(); render(); return; }
+    if(ai!==undefined){
+      const a = row.accessories[ai];
+      if(f==="accqty")        a.qty = val.trim()===""? null : Math.max(0,numOr(val,0));
+      else if(f==="accunitCost") a.unitCost = numOr(val,0);
+      else if(f==="accmfrMult") a.mfrMult = numOr(val,1);
+      else if(f==="accdesc"){ a.desc = val; rememberValue('desc', val); }
+      else if(f==="accpart")  a.part = val;
+      else if(f==="accmfr"){  a.mfr = val; rememberValue('mfr', val); }
+      else if(f==="accnote")  a.note = val;
+      else if(f==="accsource") a.source = val;
+      else if(f==="accmarkup") a.markup = parseMarkup(val);
+      markDirty(); render(); return;
+    }
+    if(f==="qty")     row.qty = Math.max(0, numOr(val,0));
+    else if(f==="unitCost"){ row.unitCost = numOr(val,0);
+      if(row.linkId && row.linkMaster) linkMembers(row.linkId).forEach(x=>{ x.r.unitCost = row.unitCost; }); }
+    else if(f==="mfrMult")  row.mfrMult = numOr(val,1);
+    else if(f==="markup")   row.markup = parseMarkup(val);
+    else if(f==="note")     row.note = val;
+    else if(f==="source")   row.source = val;
+    else if(f==="type"){    row.type = val.toUpperCase(); rememberValue('type', row.type); }
+    else if(f==="mfr"){     row.mfr = val; rememberValue('mfr', val); }
+    else if(f==="desc"){    row.desc = val; rememberValue('desc', val); }
+    else if(f==="tag"){     row.tag = val; rememberTag(val); }
+    else row[f] = val;
+    markDirty(); render();
+    return;
+  }
+
+  /* section default markup */
+  if(d.secmk!==undefined){
+    const v = parseMarkup(el.value); if(v===null) return;
+    state.options[state.current][d.secmk==="fixtures"?"fixtureMarkup":"controlMarkup"] = v;
+    markDirty(); render(); return;
+  }
+
+  /* services (rows, units, and add-ons) */
+  if(d.svcG!==undefined){
+    const gi=+d.svcG, si=+d.svcR, f=d.f, ai=d.svcA;
+    const s = state.options[state.current].services[gi].rows[si];
+    const val = el.value;
+    if(ai!==undefined){
+      const a = s.addons[+ai];
+      if(f==="addonqty") a.qty = val.trim()===""? null : Math.max(0,numOr(val,0));
+      else if(f==="addonsellRate") a.sellRate = numOr(val,0);
+      else if(f==="addondesc") a.desc = val;
+      else if(f==="addonsource") a.source = val;
+      else if(f==="addonnote") a.note = val;
+      markDirty(); render(); return;
+    }
+    if(f==="qty") s.qty = Math.max(0,numOr(val,0));
+    else if(f==="sellRate") s.sellRate = numOr(val,0);
+    else if(f==="unit"){ s.unit = val; }
+    else s[f] = val;
+    markDirty(); render(); return;
+  }
+  if(d.svcGname!==undefined){
+    state.options[state.current].services[+d.svcGname].name = el.value||"Services"; markDirty(); render(); return;
+  }
+
+  /* For Access allowance / freight percentages and manual overrides */
+  if(d.fapct!==undefined){
+    state.options[state.current][d.fapct] = Math.max(0, numOr(el.value,0)); markDirty(); render(); return;
+  }
+  if(d.afov!==undefined){
+    const v = el.value.trim();
+    state.options[state.current][d.afov] = (v===''? null : Math.max(0, numOr(v,0))); markDirty(); render(); return;
+  }
+
+  if(d.optname!==undefined){ state.options[state.current].name = el.value || "Option"; markDirty(); render(); return; }
+  if(d.stamptax!==undefined){ state.taxRate = numOr(el.value,0); markDirty(); render(); return; }
+
+  /* change orders */
+  if(d.cofield!==undefined){ setCOField(d.co, d.cofield, el.value); return; }
+  if(d.cof!==undefined){
+    const f=findCO(d.co); if(!f) return;
+    const row=f.co[d.cok][+d.coi];
+    const field=d.cof, val=el.value;
+    if(field==='qty') row.qty=Math.max(0,numOr(val,0));
+    else if(field==='unitCost') row.unitCost=numOr(val,0);
+    else if(field==='markup') row.markup=parseMarkup(val);
+    else if(field==='type') row.type=val.toUpperCase();
+    else row[field]=val;
+    markDirty(); render(); return;
+  }
+  if(d.cosf!==undefined){
+    const f=findCO(d.co); if(!f) return;
+    const s=f.co.services[+d.cosvcg].rows[+d.cosvcr];
+    const field=d.cosf, val=el.value;
+    if(field==='qty') s.qty=Math.max(0,numOr(val,0));
+    else if(field==='sellRate') s.sellRate=numOr(val,0);
+    else s[field]=val;
+    markDirty(); render(); return;
+  }
+  if(d.cosvcgname!==undefined){
+    const f=findCO(d.co); if(f){ f.co.services[+d.cosvcgname].name=el.value||'Services'; markDirty(); render(); }
+    return;
+  }
+}
+
+/* Delegated keydown — Enter adds a row at the end of a section; Tab moves focus
+   across the re-render. Only applies to the fixture/control row inputs (data-k). */
+function onPaneKeydown(e){
+  const el = e.target; if(!el || el.dataset.k===undefined) return;
+  if(e.key==="Enter"){
+    if(el.tagName==="TEXTAREA"){ if(e.shiftKey) return; e.preventDefault(); }   // keep wrap fields single-logical-line
+    const {k,i,ai} = el.dataset;
+    const arr = state.options[state.current][k];
+    if(ai===undefined && parseInt(i)===arr.length-1 && !arr[i].isSection){ el.blur(); addRow(k); }
+    else el.blur();
+  } else if(e.key==="Tab"){
+    /* If the value is unchanged, no re-render will fire — let the browser handle
+       Tab natively. Only manage focus across the re-render when an edit occurred. */
+    if(el.value === el._focusVal) return;
+    const fields = paneTabbables();
+    const idx = fields.indexOf(el);
+    if(idx!==-1){
+      const nextIdx = e.shiftKey ? idx-1 : idx+1;
+      if(nextIdx>=0 && nextIdx<fields.length){
+        e.preventDefault();
+        _pendingTabIndex = nextIdx;
+        el.blur();   // fires change -> render -> restores focus to _pendingTabIndex
+      }
+    }
+  }
 }
 
 /* ===== Drag-to-resize columns + drag rows between/within sections ===== */
@@ -3074,8 +3114,25 @@ function exportShipCSV(){
   toast('Shipping CSV exported');
 }
 
+/* Lazy-load the Excel engine. The SheetJS library is embedded as non-executed
+   text (see build.js) so it costs nothing at startup; we compile it the first
+   time the user actually exports to Excel. Returns true once XLSX is available. */
+let _sheetjsReady = false;
+function ensureSheetJS(){
+  if(_sheetjsReady || typeof XLSX!=='undefined'){ _sheetjsReady = true; return true; }
+  const src = document.getElementById('sheetjs-src');
+  if(src && src.textContent){
+    try{
+      (0,eval)(src.textContent);      // indirect eval → runs in global scope, defines window.XLSX
+      _sheetjsReady = (typeof XLSX!=='undefined');
+      return _sheetjsReady;
+    }catch(e){ /* fall through */ }
+  }
+  return (typeof XLSX!=='undefined');
+}
+
 function exportShipXLSX(){
-  if(typeof XLSX==='undefined'){ toast('Excel library not loaded'); return; }
+  if(!ensureSheetJS()){ toast('Excel engine could not load'); return; }
   const rows = scheduleForExport();
   /* --- Schedule sheet --- */
   const aoa = [SHIP_EXPORT_COLS];
@@ -3120,7 +3177,7 @@ function exportShipXLSX(){
 /* Full estimate export — one sheet per option with fixtures, controls, services,
    allowance/freight, change orders, and totals. Mirrors the BOM template layout. */
 function exportEstimateXLSX(){
-  if(typeof XLSX==='undefined'){ toast('Excel library not loaded'); return; }
+  if(!ensureSheetJS()){ toast('Excel engine could not load'); return; }
   const wb = XLSX.utils.book_new();
   const HDR = ['Qty','Type','Tag','Manufacturer','Description','Part #','Unit cost','Markup %','Unit sell','Ext. cost','Ext. sell','Notes','Price source'];
   const moneyCols = [6,8,9,10];   // zero-based col indices to format as currency
