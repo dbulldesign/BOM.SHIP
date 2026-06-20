@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.32.0";
+const APP_VERSION = "1.33.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2839,6 +2839,46 @@ let shipStatusFilter = 'all';   // 'all' | 'outstanding' | 'ordered' | 'shipped'
 let shipFilter = 'all';            // 'all' | option index
 const shipSel = new Set();          // selected row ids (transient)
 
+/* Per-column filters for the ship schedule (transient view state). AND-combined. */
+let shipFilterOpen = false;
+let shipColFilters = {};
+let _shipFilterFocus = null;   // field to refocus after the schedule re-renders
+function shipFilterCount(){ return Object.keys(shipColFilters).filter(k=>String(shipColFilters[k]).trim()).length; }
+function toggleShipFilters(){ shipFilterOpen = !shipFilterOpen; renderShipping(); }
+function setShipColFilter(field, val){ _shipFilterFocus = field; if(String(val).trim()) shipColFilters[field]=val; else delete shipColFilters[field]; renderShipping(); }
+function clearShipFilters(){ shipColFilters = {}; renderShipping(); }
+function scfIn(field){ return `<th><input class="col-filter-in" data-scf="${field}" value="${esc(shipColFilters[field]||'')}" placeholder="filter…" oninput="setShipColFilter('${field}',this.value)" aria-label="Filter by ${field}"></th>`; }
+function shipLineFieldVal(l, field){
+  switch(field){
+    case 'optName': return l.optName||'';
+    case 'kind':    return l.kind||'';
+    case 'type':    return l.type||'';
+    case 'mfr':     return l.mfr||'';
+    case 'desc':    return l.desc||'';
+    case 'part':    return l.part||'';
+    case 'status':  return shipStatus(l.meta||{})[0]||'';
+    default:        return (l.meta && l.meta[field]) || '';
+  }
+}
+function shipLineMatches(l){
+  return Object.keys(shipColFilters).every(field=>{
+    const v = String(shipColFilters[field]).trim().toLowerCase();
+    if(!v) return true;
+    return String(shipLineFieldVal(l, field)).toLowerCase().includes(v);
+  });
+}
+/* Drop category/group bands that have no remaining item rows under them. */
+function pruneEmptyShipBands(lines){
+  return lines.filter((l,i)=>{
+    if(!(l.isCategory||l.isGroup)) return true;
+    for(let j=i+1;j<lines.length;j++){
+      if(lines[j].isCategory||lines[j].isGroup) break;
+      if(!lines[j].isLot && !lines[j].isPiece) return true;
+    }
+    return false;
+  });
+}
+
 function blankMeta(){
   return { po:'', orderDate:'', recvDate:'', estShip:'', shipDate:'', shipper:'',
            tracking:'', delivery:'', comments:'', invoiceId:null };
@@ -3077,6 +3117,8 @@ function renderShipping(){
         <label>Show</label>
         <select onchange="shipFilter = this.value==='all' ? 'all' : +this.value; shipSel.clear(); renderShipping()">${optOpts}</select>
         <select class="ship-status-filter" onchange="shipStatusFilter=this.value; renderShipping()">${statusOpts}</select>
+        <button class="ghost ${shipFilterOpen?'active':''}" onclick="toggleShipFilters()" title="Per-column filters">⛃ Filters${shipFilterCount()?' ('+shipFilterCount()+')':''}</button>
+        ${shipFilterCount()?`<button class="ghost" onclick="clearShipFilters()" title="Clear all column filters">Clear filters</button>`:''}
         <span class="ship-live-note">Live from the bill of materials.</span>
       </div>
       <div class="grow"></div>
@@ -3124,6 +3166,12 @@ function renderShipping(){
       }
       return false;
     });
+  }
+
+  /* per-column filters — drop non-matching item rows, then prune empty bands */
+  if(shipFilterCount()){
+    lines = lines.filter(l=> (l.isCategory||l.isGroup||l.isLot||l.isPiece) ? true : shipLineMatches(l));
+    lines = pruneEmptyShipBands(lines);
   }
 
   /* sort (display only) — disabled while section groups or category bands are present */
@@ -3284,7 +3332,12 @@ function renderShipping(){
             ${sth('status','Status')}
             ${SHIP_FIELDS.map(f=>sth(f.k,f.label)).join('')}
             <th>Invoice</th>
-          </tr></thead>
+          </tr>
+          ${shipFilterOpen ? `<tr class="col-filter-row no-print">
+            <th></th>${['optName','kind','type','mfr','desc','part'].map(scfIn).join('')}<th></th><th></th>${scfIn('status')}
+            ${SHIP_FIELDS.map(f=>scfIn(f.k)).join('')}<th></th>
+          </tr>` : ''}
+          </thead>
           <tbody>${body}</tbody>
         </table>
       </div>
@@ -3303,6 +3356,12 @@ function renderShipping(){
     </div>`;
 
   el.innerHTML = dashboard + filterBar + table + assignBar + invoicesPanel() + shipSummary();
+  /* restore focus to the column-filter input the user is typing in */
+  if(_shipFilterFocus){
+    const fi = document.querySelector('.col-filter-in[data-scf="'+_shipFilterFocus+'"]');
+    if(fi){ fi.focus(); try{ const v=fi.value; fi.setSelectionRange(v.length,v.length); }catch(e){} }
+    _shipFilterFocus = null;
+  }
 }
 
 /* Bulk edit: set several procurement/shipping fields at once on every selected
