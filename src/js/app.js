@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.28.1";
+const APP_VERSION = "1.29.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -53,7 +53,10 @@ async function checkForUpdates(manual){
     if(badge) badge.textContent="v"+APP_VERSION;
   }
 }
+let _offlineUpdate = null;   // {ver, dlUrl, dlName} for the file:// build's update
 function showUpdateBanner(ver,dlUrl,dlName){
+  _offlineUpdate = {ver, dlUrl, dlName};
+  document.body.classList.add('has-update-banner');
   let b=document.getElementById('updateBanner');
   if(!b){
     b=document.createElement('div');
@@ -61,10 +64,44 @@ function showUpdateBanner(ver,dlUrl,dlName){
     document.body.insertBefore(b,document.body.firstChild);
   }
   b.innerHTML =
-    '<span>A newer version <b>'+esc(ver)+'</b> is available (you have v'+APP_VERSION+').'+
-    ' <span class="upd-note">Downloads the new file — save it over your old one, then reopen.</span></span>'+
-    '<a class="upd-dl" href="'+esc(dlUrl)+'" download="'+esc(dlName)+'">Download v'+esc(ver.replace(/^v/i,''))+'</a>'+
-    '<button class="upd-x" title="Dismiss" onclick="this.parentNode.remove()">×</button>';
+    '<span class="ub-msg">⬆ A newer version <b>'+esc(ver.replace(/^v/i,''))+'</b> is available (you have v'+APP_VERSION+').</span>'+
+    '<span class="ub-actions">'+
+      '<button class="ub-update" onclick="startGuidedUpdate()">Download &amp; replace…</button>'+
+      '<button class="ub-later" title="Dismiss" onclick="dismissUpdateBanner()">Later</button>'+
+    '</span>';
+}
+/* Best-guess OS for tailoring the replace instructions. */
+function osGuess(){
+  const p=(navigator.platform||'')+' '+(navigator.userAgent||'');
+  if(/Mac|iP(hone|od|ad)/i.test(p)) return 'mac';
+  if(/Win/i.test(p)) return 'win';
+  return 'other';
+}
+/* One-click: start the download, then walk the user through replacing the file. */
+function startGuidedUpdate(){
+  const u = _offlineUpdate; if(!u) return;
+  try{
+    const a=document.createElement('a'); a.href=u.dlUrl; a.download=u.dlName||'lighting-bom-estimator.html';
+    a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ try{ window.open(u.dlUrl,'_blank'); }catch(_){ } }
+
+  let here=''; try{ here=decodeURIComponent((location.pathname||'').split('/').pop()||''); }catch(e){}
+  const os=osGuess();
+  const reveal = os==='mac' ? 'Finder → Downloads' : os==='win' ? 'File Explorer → Downloads' : 'your Downloads folder';
+  const replaceWord = os==='mac' ? '“Replace”' : os==='win' ? '“Replace the file in the destination”' : 'Replace';
+  const body =
+    '<p class="paste-help">Your new version <b>v'+esc(u.ver.replace(/^v/i,''))+'</b> is downloading'+
+    ( u.dlName?(' as <b>'+esc(u.dlName)+'</b>'):'' )+'. Then:</p>'+
+    '<ol class="upd-steps">'+
+      '<li>Open <b>'+reveal+'</b> and find the downloaded file.</li>'+
+      '<li>Move it into the folder where your current app file lives'+(here?(' (the one open now is <b>'+esc(here)+'</b>)'):'')+'.</li>'+
+      '<li>When asked, choose '+replaceWord+' to overwrite the old version. '+
+        '<span class="upd-note">If your browser renamed it (e.g. “…(1).html”), delete the old file and rename the new one to match — or just open the newest file.</span></li>'+
+      '<li><b>Open the new file</b> (double-click). Your saved <b>.json</b> projects and browser backups are untouched.</li>'+
+    '</ol>'+
+    '<p class="upd-note">Using a launcher (<b>.command</b> / <b>.cmd</b>)? It opens whatever HTML is in its folder, so replacing the <b>.html</b> is all you need.</p>'+
+    '<p class="upd-note">Didn’t download? <a href="'+esc(u.dlUrl)+'" download="'+esc(u.dlName||'lighting-bom-estimator.html')+'">Click here to download v'+esc(u.ver.replace(/^v/i,''))+'</a>.</p>';
+  openModal({ title:'Update — download & replace', bodyHTML:body, wide:true, cancelLabel:'Got it' });
 }
 (function initVersionBadge(){
   const badge=document.getElementById('verBadge');
