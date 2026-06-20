@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.10.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3269,6 +3269,22 @@ function savedAddressManager(){
 let fileHandle = null;
 const FILE_TYPES = [{description:"Lighting BOM project", accept:{"application/json":[".json"]}}];
 
+/* Save-file schema version. Bump when the shape changes. Loaders are defensive
+   (normalize + default) so a NEW build opens any OLDER file and upgrades it. */
+const SAVE_VERSION = 4;
+/* Add legacy-friendly mirror fields so an OLDER build degrades gracefully rather
+   than breaking. Today: services are sell-only (sellRate); older builds expect
+   unitCost+markup, so mirror sellRate as unitCost with 0% markup — old builds then
+   show the correct sell (add-ons are dropped there, but sells stay right). */
+function compatForSave(s){
+  const c = JSON.parse(JSON.stringify(s));
+  const mirrorSvc = g => (g.rows||[]).forEach(row=>{ if(row.sellRate!==undefined){ row.unitCost = numOr(row.sellRate,0); row.markup = 0; } });
+  (c.options||[]).forEach(o=>{
+    (o.services||[]).forEach(mirrorSvc);
+    (o.changeOrders||[]).forEach(co=> (co.services||[]).forEach(mirrorSvc));
+  });
+  return c;
+}
 function projectJSON(){
   /* prune shipMeta entries that no longer match any BOM row (deleted parts) */
   const liveIds = new Set();
@@ -3280,8 +3296,8 @@ function projectJSON(){
   });
   const meta = {};
   Object.keys(state.shipMeta||{}).forEach(id=>{ if(liveIds.has(id)) meta[id]=state.shipMeta[id]; });
-  const clean = {...state, shipMeta:meta};
-  return JSON.stringify({app:"lighting-bom", version:3, saved:new Date().toISOString(), ...clean}, null, 2);
+  const clean = compatForSave({...state, shipMeta:meta});
+  return JSON.stringify({app:"lighting-bom", version:SAVE_VERSION, saved:new Date().toISOString(), ...clean}, null, 2);
 }
 function suggestedName(){
   return (state.name? state.name.replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"_") : "lighting_bom") + ".json";
@@ -3340,7 +3356,12 @@ function loadFromText(text, label){
     const d = JSON.parse(text);
     applyProject(d);
     dirty=false; lastSavedAt=Date.now(); pushRecent(); render(); updateSaveStamp();
-    toast("Project opened: "+(state.name||label));
+    /* Forward-compat notice: opening a file written by a newer app version. */
+    if(typeof d.version==='number' && d.version > SAVE_VERSION){
+      toast("Opened a file from a newer version — some newer details may be simplified.");
+    } else {
+      toast("Project opened: "+(state.name||label));
+    }
   }catch(err){ alert("Could not open this file — it doesn't look like a Lighting BOM project file."); }
 }
 function applyProject(d){

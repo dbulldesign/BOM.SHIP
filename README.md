@@ -140,3 +140,25 @@ workflow** (type a tag), or `git tag v1.1.0 && git push origin v1.1.0`.
   fallback). Those `.json` files are the master copies you can back up or share.
 - The browser also keeps autosave backups and recent-project history in
   `localStorage` on the machine you use.
+
+## File compatibility
+
+Project files carry a schema `version` (currently **4**). The goal is that files
+move freely between app versions:
+
+- **New app opens an old file → upgrades it cleanly.** Loaders normalize every
+  field and fill in defaults, so older files (any prior version) open and are
+  silently upgraded to the current shape.
+- **Old app opens a new file → degrades gracefully, doesn't break.** New fields
+  an older build doesn't know are ignored. For fields whose *shape* changed, the
+  new build writes legacy-friendly mirror values so older builds still show
+  sensible numbers — e.g. sell-only **services** are also saved as `unitCost` +
+  `0% markup`, so a pre-services-overhaul build still shows the correct sell
+  (newer extras like per-day/trip add-ons won't appear there).
+- Opening a file written by a **newer** app than you're running shows a brief
+  notice that some newer details may be simplified.
+
+Practical guidance: the `.json` file is always the source of truth, and saving
+from any version keeps it loadable everywhere. If you round-trip a file through
+an *older* build (open + save), brand-new-only details may be dropped — so for
+shared files, keep everyone on the latest version when you can.
