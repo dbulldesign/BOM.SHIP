@@ -994,6 +994,39 @@
   .modal-body .upd-note{display:block;color:var(--ink-soft);font-size:.78rem;margin-top:6px;line-height:1.45}
   .modal-body .upd-note a{color:var(--amber-deep);font-weight:600}
   body.dark .modal-body .upd-note a{color:var(--amber)}
+
+  /* ===== Phase A: display settings (density, text size, sticky) ===== */
+  /* Text size — scale the three main view areas (content, not chrome). */
+  #estimateView,#shippingView,#adviceView{zoom:var(--ui-scale,1)}
+
+  /* Compact density — tighter table rows + inputs */
+  body.density-compact td input,
+  body.density-compact td select,
+  body.density-compact td textarea{padding-top:1px;padding-bottom:1px}
+  body.density-compact table td,
+  body.density-compact table th{padding-top:2px;padding-bottom:2px}
+  body.density-compact .ship-table td,
+  body.density-compact .ship-table th{padding-top:3px;padding-bottom:3px}
+  body.density-compact .acc-row td{padding-top:0;padding-bottom:0}
+
+  /* Sticky table headers + sticky grand-total row (toggle) */
+  body.sticky-head .table-scroll{position:relative}
+  body.sticky-head .section thead th,
+  body.sticky-head .ship-table thead th{position:sticky;top:0;z-index:4}
+  body.sticky-head .stamp{position:sticky;bottom:0;z-index:3;
+    box-shadow:0 -6px 14px -8px rgba(0,0,0,.25)}
+  body.dark.sticky-head .stamp{box-shadow:0 -6px 14px -8px rgba(0,0,0,.6)}
+  @media print{ body.sticky-head .section thead th,
+    body.sticky-head .ship-table thead th,
+    body.sticky-head .stamp{position:static;box-shadow:none} }
+
+  /* Segmented control (settings) */
+  .seg{display:inline-flex;margin-top:6px;border:1px solid var(--rule-dark);border-radius:5px;overflow:hidden}
+  .seg-btn{border:none;background:var(--sheet);color:var(--ink);padding:5px 14px;font-size:.82rem;cursor:pointer;border-radius:0}
+  .seg-btn + .seg-btn{border-left:1px solid var(--rule-dark)}
+  .seg-btn.on{background:var(--amber);color:#16181F;font-weight:600}
+  .seg-btn:hover:not(.on){background:var(--amber-wash)}
+  body.dark .seg-btn:hover:not(.on){background:#2A2310}
 </style>
 </head>
 <body>
@@ -1124,7 +1157,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.29.0";
+const APP_VERSION = "1.30.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1897,15 +1930,25 @@ function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); el
 
 /* Global display settings (local to this browser). */
 const SETTINGS_KEY = 'lbom_settings_v1';
+const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true };
 let uiSettings = loadSettings();
-function loadSettings(){ try{ return Object.assign({colText:'fit', showSelect:true}, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {colText:'fit', showSelect:true}; } }
+function loadSettings(){ try{ return Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {...SETTINGS_DEFAULTS}; } }
 function saveSettings(){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(uiSettings)); }catch(e){} }
+/* These are app/browser-local display preferences — never stored in the job .json. */
 function applySettings(){
-  document.body.classList.toggle('coltext-wrap', uiSettings.colText==='wrap');
-  document.body.classList.toggle('coltext-fit', uiSettings.colText!=='wrap');
+  const b = document.body;
+  b.classList.toggle('coltext-wrap', uiSettings.colText==='wrap');
+  b.classList.toggle('coltext-fit', uiSettings.colText!=='wrap');
+  b.classList.toggle('density-compact', uiSettings.density==='compact');
+  b.classList.toggle('sticky-head', uiSettings.stickyHead!==false);
+  const scale = Math.min(1.4, Math.max(0.8, numOr(uiSettings.textScale,1)));
+  b.style.setProperty('--ui-scale', String(scale));
 }
 function setColText(mode){ uiSettings.colText = (mode==='wrap'?'wrap':'fit'); saveSettings(); applySettings(); render(); }
 function setShowSelect(on){ uiSettings.showSelect = !!on; saveSettings(); render(); }
+function setDensity(mode){ uiSettings.density = (mode==='compact'?'compact':'comfortable'); saveSettings(); applySettings(); }
+function setTextScale(v){ uiSettings.textScale = Math.min(1.4, Math.max(0.8, numOr(v,1))); saveSettings(); applySettings(); }
+function setStickyHead(on){ uiSettings.stickyHead = !!on; saveSettings(); applySettings(); }
 function openSettings(){
   const original = uiSettings.colText;                 // remembered so Cancel can revert
   const checked = m => uiSettings.colText===m ? 'checked' : '';
@@ -1917,7 +1960,20 @@ function openSettings(){
       <span><b>Wrap text</b><br><span class="set-sub">Long text wraps onto multiple lines within the column.</span></span></label>
     <hr class="set-div">
     <label class="set-opt"><input type="checkbox" id="setShowSelect" ${uiSettings.showSelect?'checked':''}>
-      <span><b>Show selection checkboxes</b><br><span class="set-sub">A checkbox column on the left of each table for selecting rows to bulk-edit. Tip: <b>Shift-click</b> a checkbox to select a range.</span></span></label>`;
+      <span><b>Show selection checkboxes</b><br><span class="set-sub">A checkbox column on the left of each table for selecting rows to bulk-edit. Tip: <b>Shift-click</b> a checkbox to select a range.</span></span></label>
+    <hr class="set-div">
+    <div class="set-opt"><div style="width:100%">
+      <b>Row density</b>
+      <div class="seg" role="radiogroup" aria-label="Row density">
+        <button type="button" class="seg-btn ${uiSettings.density!=='compact'?'on':''}" data-density="comfortable">Comfortable</button>
+        <button type="button" class="seg-btn ${uiSettings.density==='compact'?'on':''}" data-density="compact">Compact</button>
+      </div></div></div>
+    <div class="set-opt"><div style="width:100%">
+      <b>Text size</b> <span class="set-sub" id="tsLabel">${Math.round(numOr(uiSettings.textScale,1)*100)}%</span>
+      <input type="range" id="setTextScale" min="0.8" max="1.4" step="0.05" value="${numOr(uiSettings.textScale,1)}" style="width:100%" aria-label="Text size">
+    </div></div>
+    <label class="set-opt"><input type="checkbox" id="setStickyHead" ${uiSettings.stickyHead!==false?'checked':''}>
+      <span><b>Sticky headers &amp; totals</b><br><span class="set-sub">Keep table headers and the grand-total row visible while scrolling.</span></span></label>`;
   openModal({
     title:'Settings', bodyHTML:body, wide:false,
     cancelLabel:'Close', confirmLabel:'Accept',
@@ -1933,6 +1989,17 @@ function openSettings(){
       });
       const sel = back.querySelector('#setShowSelect');
       if(sel) sel.addEventListener('change', ()=>{ setShowSelect(sel.checked); dirtyUI(); });
+      back.querySelectorAll('.seg-btn[data-density]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          setDensity(btn.dataset.density);
+          back.querySelectorAll('.seg-btn[data-density]').forEach(b=>b.classList.toggle('on', b===btn));
+          dirtyUI();
+        });
+      });
+      const ts = back.querySelector('#setTextScale'), tsl = back.querySelector('#tsLabel');
+      if(ts) ts.addEventListener('input', ()=>{ setTextScale(ts.value); if(tsl) tsl.textContent = Math.round(numOr(ts.value,1)*100)+'%'; dirtyUI(); });
+      const sh = back.querySelector('#setStickyHead');
+      if(sh) sh.addEventListener('change', ()=>{ setStickyHead(sh.checked); dirtyUI(); });
     }
   });
 }
