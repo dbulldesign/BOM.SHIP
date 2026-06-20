@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.21.0";
+const APP_VERSION = "1.22.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1086,8 +1086,19 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
   const linkInfo = {};
   if(allowAccessories){
     let gi = 0;
-    rows.forEach(r=>{ if(r && !r.isSection && r.linkId && !linkInfo[r.linkId]){ linkInfo[r.linkId] = {color:LINK_COLORS[gi%LINK_COLORS.length], idx:gi+1, count:0, masterType:''}; gi++; } });
-    rows.forEach(r=>{ if(r && !r.isSection && r.linkId && linkInfo[r.linkId]){ linkInfo[r.linkId].count++; if(r.linkMaster) linkInfo[r.linkId].masterType = (r.type||'').trim(); } });
+    rows.forEach(r=>{
+      if(!r || r.isSection || !r.linkId) return;
+      if(!linkInfo[r.linkId]){
+        linkInfo[r.linkId] = {color:LINK_COLORS[gi%LINK_COLORS.length], letter:String.fromCharCode(65+(gi%26)), count:0, masterType:'', masterLabel:''};
+        gi++;
+      }
+    });
+    rows.forEach(r=>{
+      if(!r || r.isSection || !r.linkId || !linkInfo[r.linkId]) return;
+      const g = linkInfo[r.linkId];
+      g.count++;
+      if(r.linkMaster){ const t=(r.type||'').trim(); g.masterType = t; g.masterLabel = t || (r.part||'').trim() || 'master'; }
+    });
   }
   function selCell(r){ return selCol ? `<td class="col-sel no-print"><input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')"></td>` : ''; }
 
@@ -1113,22 +1124,24 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const costCell = isLinkedFollower
       ? `<td style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
       : `<td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>`;
-    /* Link control: master shows ★ + group size; a follower shows 🔗 + the master's
-       TYPE so it's obvious which fixture it's linked to. A coloured chip + left
-       stripe (per group) ties members together visually. */
+    /* Link control: the master shows a "★ Master A" chip; each follower shows a
+       "🔗 A → F1" chip naming the master it's linked to. The group letter + colour
+       (and the matching left stripe) tie members together; hovering any member
+       lights up the whole group. */
     let linkBtn = '';
     if(allowAccessories){
-      const lbl = grp ? (r.linkMaster ? `★<span class="link-rel">${esc(String(grp.count))}</span>`
-                                      : `🔗<span class="link-rel">${esc(grp.masterType||'master')}</span>`)
+      const lbl = grp ? (r.linkMaster ? `★<span class="link-rel">Master ${esc(grp.letter)}</span>`
+                                      : `🔗<span class="link-rel">${esc(grp.letter)} → ${esc(grp.masterLabel||'master')}</span>`)
                       : '🔗';
       const ttl = _linkPick
-        ? (r.linkId===_linkPick ? (r.linkMaster?'Finish linking':'Unlink this fixture') : 'Link this fixture to the master (shared cost)')
-        : (grp ? (r.linkMaster ? `Cost master of link group L${grp.idx} (${grp.count} fixtures) — click to unlink` : `Linked to ${grp.masterType||'master'} — shares its unit cost · click to unlink`) : 'Link unit cost with other fixtures');
+        ? (r.linkId===_linkPick ? (r.linkMaster?'Master of this new link group — click to finish linking' : 'Unlink this fixture') : 'Link this fixture to the master (shares the master’s unit cost)')
+        : (grp ? (r.linkMaster ? `Master of link group ${grp.letter} — ${grp.count-1} other ${grp.count-1===1?'fixture shares':'fixtures share'} its unit cost. Click to unlink.` : `Linked to master “${grp.masterLabel||'master'}” (group ${grp.letter}) — shares its unit cost. Click to unlink.`) : 'Link this fixture’s unit cost with others (this becomes the master)');
       const chipStyle = grp ? ` style="--lg:${grp.color}"` : '';
       linkBtn = `<button class="rowact linkbtn${r.linkId?(r.linkMaster?' is-master':' is-linked'):''}"${chipStyle} tabindex="-1" title="${ttl}" onclick="linkAction('${kind}',${i})">${lbl}</button>`;
     }
     const stripeStyle = grp ? ` style="--lg:${grp.color}"` : '';
-    return `<tr data-rk="${kind}" data-ri="${i}" class="${linkCls}${picking}"${stripeStyle}>
+    const linkAttr = grp ? ` data-link="${r.linkId}"` : '';
+    return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${linkCls}${picking}"${stripeStyle}>
       ${selCell(r)}
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
       <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
@@ -1942,9 +1955,25 @@ function bindPane(){
     pane.addEventListener("change", onPaneChange);
     pane.addEventListener("focusin", e=>{ const t=e.target; if(t && 'value' in t) t._focusVal = t.value; });
     pane.addEventListener("keydown", onPaneKeydown);
+    pane.addEventListener("mouseover", onPaneLinkHover);
+    pane.addEventListener("mouseleave", ()=>onPaneLinkHover({target:pane}));
     _paneDelegated = true;
   }
   bindTableInteractions(pane);
+}
+
+/* Hovering any fixture in a link group lights up every member of that group, so
+   it's immediately clear which lines are linked together (and to which master). */
+let _hlLink = null;
+function onPaneLinkHover(e){
+  const t = e.target;
+  const tr = (t && t.closest) ? t.closest('tr[data-link]') : null;
+  const id = tr ? tr.getAttribute('data-link') : null;
+  if(id === _hlLink) return;
+  const pane = document.getElementById('pane'); if(!pane) return;
+  pane.querySelectorAll('tr.link-hl').forEach(x=>x.classList.remove('link-hl'));
+  _hlLink = id;
+  if(id) pane.querySelectorAll('tr[data-link="'+id+'"]').forEach(x=>x.classList.add('link-hl'));
 }
 
 /* Delegated change dispatcher — routes to the right state mutation by the data-*
@@ -2262,13 +2291,13 @@ function linkAction(kind, i){
       unlinkRow(i); return;                          // clicking a member unlinks it
     }
     row.linkId = _linkPick; row.linkMaster = false; row.unitCost = master.unitCost;
-    markDirty(); render(); toast('Linked '+(row.type||'fixture')+' — shares '+(master.type||'master')+' cost');
+    markDirty(); render(); toast('🔗 '+(row.type||'fixture')+' linked → shares master '+(master.type||'')+' unit cost');
     return;
   }
   if(row.linkId){ unlinkRow(i); return; }
   row.linkId = 'lnk'+(_idSeed++).toString(36); row.linkMaster = true; _linkPick = row.linkId;
   markDirty(); render();
-  toast('Cost master set. Click 🔗 on fixtures to share this cost; click 🔗 on the master again to finish.');
+  toast('★ '+(row.type||'This fixture')+' is now the MASTER. Click the link icon on other fixtures to link them as shared-cost copies; click the master again to finish.');
 }
 function finishLink(){
   const id = _linkPick; _linkPick = null;
