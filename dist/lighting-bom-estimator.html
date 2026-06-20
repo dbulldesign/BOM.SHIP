@@ -1117,7 +1117,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.27.0";
+const APP_VERSION = "1.28.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -5091,6 +5091,12 @@ async function saveProject(saveAs){
     try{
       if(saveAs || !fileHandle){
         fileHandle = await window.showSaveFilePicker({suggestedName:suggestedName(), types:FILE_TYPES});
+      } else if(fileHandle.queryPermission){
+        /* A handle re-bound after a PWA update reload may need write permission
+           re-granted — request it within this Save click (a user gesture). */
+        let p = await fileHandle.queryPermission({mode:'readwrite'});
+        if(p!=='granted' && fileHandle.requestPermission) p = await fileHandle.requestPermission({mode:'readwrite'});
+        if(p!=='granted'){ fileHandle = await window.showSaveFilePicker({suggestedName:suggestedName(), types:FILE_TYPES}); }
       }
       const w = await fileHandle.createWritable();
       await w.write(data); await w.close();
@@ -5596,6 +5602,33 @@ window.addEventListener('afterprint', _afterPrintRestore);
  * the offline file — onUpdateReady is simply never called there.) */
 const UPDATE_RESTORE_KEY = 'lbom_update_restore_v1';
 let _pendingUpdateWorker = null;
+
+/* File System Access handles can't go in localStorage (not JSON), but they ARE
+   structured-cloneable, so we stash the current file handle in IndexedDB across
+   an update reload and re-bind it — so Save keeps writing to the same file. */
+function idbOpenHandles(){
+  return new Promise((res,rej)=>{
+    if(!window.indexedDB){ rej(); return; }
+    const req = indexedDB.open('lbom-handles', 1);
+    req.onupgradeneeded = ()=>{ try{ req.result.createObjectStore('h'); }catch(e){} };
+    req.onsuccess = ()=>res(req.result);
+    req.onerror = ()=>rej(req.error);
+  });
+}
+function idbPutHandle(key, val){
+  return idbOpenHandles().then(db=>new Promise((res,rej)=>{
+    const tx = db.transaction('h','readwrite'), st = tx.objectStore('h');
+    if(val==null) st.delete(key); else st.put(val, key);
+    tx.oncomplete = ()=>res(); tx.onerror = ()=>rej(tx.error);
+  })).catch(()=>{});
+}
+function idbGetHandle(key){
+  return idbOpenHandles().then(db=>new Promise(res=>{
+    const rq = db.transaction('h','readonly').objectStore('h').get(key);
+    rq.onsuccess = ()=>res(rq.result||null); rq.onerror = ()=>res(null);
+  })).catch(()=>null);
+}
+
 function onUpdateReady(worker){ _pendingUpdateWorker = worker || null; showUpdateBanner(); }
 function showUpdateBanner(){
   if(document.getElementById('updateBanner')) return;
@@ -5618,26 +5651,30 @@ function dismissUpdateBanner(){
 function saveUpdateRestore(){
   try{ localStorage.setItem(UPDATE_RESTORE_KEY, JSON.stringify({ ts:Date.now(), name:state.name||'', json:projectJSON() })); }catch(e){}
 }
-function applyUpdateNow(){
+async function applyUpdateNow(){
   saveUpdateRestore();
+  try{ await idbPutHandle('lastFile', fileHandle || null); }catch(e){}   // persist the bound file handle
+  const go = ()=>{ try{ location.reload(); }catch(e){} };
   if(_pendingUpdateWorker){
     try{ _pendingUpdateWorker.postMessage('skipWaiting'); }catch(e){}
-    /* the SW controllerchange handler reloads; fall back in case it doesn't fire */
-    setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1500);
-  } else {
-    try{ location.reload(); }catch(e){}
-  }
+    setTimeout(go, 1500);   // controllerchange handler usually reloads first; fallback otherwise
+  } else { go(); }
 }
 function maybeRestoreAfterUpdate(){
   let slot = null;
   try{ slot = JSON.parse(localStorage.getItem(UPDATE_RESTORE_KEY) || 'null'); }catch(e){}
   try{ localStorage.removeItem(UPDATE_RESTORE_KEY); }catch(e){}
-  if(!slot || !slot.json) return false;
+  if(!slot || !slot.json){ idbPutHandle('lastFile', null); return false; }   // clear any stale handle
   try{
     applyProject(JSON.parse(slot.json));
     dirty = true; lastSavedAt = null;
     render(); resetHistory(); updateSaveStamp();
-    toast('Restored your in-progress work after the update — review and Save');
+    /* Re-bind the file handle that was saved before the reload (async). */
+    idbGetHandle('lastFile').then(h=>{
+      idbPutHandle('lastFile', null);                 // one-shot
+      if(h){ fileHandle = h; updateSaveStamp(); toast('Re-linked to your file — Save (Ctrl+S) writes back to it'); }
+      else { toast('Restored your in-progress work after the update — review and Save'); }
+    }).catch(()=>{});
     return true;
   }catch(e){ return false; }
 }
