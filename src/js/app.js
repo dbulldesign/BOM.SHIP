@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.31.0";
+const APP_VERSION = "1.32.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1043,18 +1043,46 @@ function sortEntries(entries, sc, defMarkup){
 
 /* Dim rows that don't match the find box; highlight those that do. Works on the
    live DOM so it doesn't disturb editing or re-render. */
+/* Per-column filters (transient view state — not saved to the job or localStorage).
+   Combine with the global Find box and with each other (AND). */
+let bomFilterOpen = false;
+let bomColFilters = {};   // { fieldKey: text }
+function activeFilterCount(){ return Object.keys(bomColFilters).filter(k=>String(bomColFilters[k]).trim()).length + (bomFilter.trim()?1:0); }
+function setColFilter(field, val){
+  if(String(val).trim()) bomColFilters[field] = val; else delete bomColFilters[field];
+  applyBomFilter(); updateFilterBadge();
+}
+function clearColFilters(){ bomColFilters = {}; bomFilter = ''; render(); }
+function toggleBomFilters(){ bomFilterOpen = !bomFilterOpen; render(); }
+function updateFilterBadge(){
+  const el = document.getElementById('bomFilterBadge');
+  if(el){ const n = activeFilterCount(); el.textContent = n? ' ('+n+')' : ''; }
+  const clr = document.getElementById('bomFilterClear');
+  if(clr) clr.style.display = activeFilterCount()? '' : 'none';
+}
 function applyBomFilter(){
   const q = bomFilter.trim().toLowerCase();
+  const cf = Object.keys(bomColFilters).map(k=>[k, String(bomColFilters[k]).trim().toLowerCase()]).filter(([,v])=>v);
   const pane = document.getElementById('pane');
   if(!pane) return;
-  const rows = pane.querySelectorAll('.section tbody tr');
-  rows.forEach(tr=>{
-    if(!q){ tr.classList.remove('bom-dim','bom-hit'); return; }
-    /* gather text from this row's inputs + cells */
-    let txt = '';
-    tr.querySelectorAll('input').forEach(i=> txt += ' '+i.value);
-    txt += ' '+tr.textContent;
-    const hit = txt.toLowerCase().includes(q);
+  pane.querySelectorAll('.section tbody tr').forEach(tr=>{
+    const isData = !!tr.querySelector('[data-f]');
+    if(!isData){ tr.classList.remove('bom-dim','bom-hit'); return; }   // section / add / toggle rows
+    if(!q && !cf.length){ tr.classList.remove('bom-dim','bom-hit'); return; }
+    let hit = true;
+    if(q){
+      let txt = '';
+      tr.querySelectorAll('input,textarea').forEach(i=> txt += ' '+i.value);
+      txt += ' '+tr.textContent;
+      hit = txt.toLowerCase().includes(q);
+    }
+    if(hit && cf.length){
+      hit = cf.every(([field,v])=>{
+        /* accessory rows use acc-prefixed field keys (accmfr, accpart, …) */
+        const inp = tr.querySelector('[data-f="'+field+'"]') || tr.querySelector('[data-f="acc'+field+'"]');
+        return inp ? String(inp.value).toLowerCase().includes(v) : false;
+      });
+    }
     tr.classList.toggle('bom-dim', !hit);
     tr.classList.toggle('bom-hit', hit);
   });
@@ -1141,7 +1169,7 @@ function render(){
 
   renderPane();
   renderCompare();
-  if(bomFilter) applyBomFilter();
+  if(bomFilter || Object.keys(bomColFilters).length) applyBomFilter();
   if(_pendingTabIndex !== null){
     const fields = paneTabbables();
     const target = fields[_pendingTabIndex];
@@ -1214,6 +1242,8 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     });
   }
   function selCell(r){ return selCol ? `<td class="col-sel no-print"><input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')"></td>` : ''; }
+  /* per-column filter input (shown when the Filters row is toggled on) */
+  const cfIn = f => `<input class="col-filter-in" value="${esc(bomColFilters[f]||'')}" placeholder="filter…" oninput="setColFilter('${f}',this.value)" aria-label="Filter by ${f}">`;
 
   /* single markup field (accepts percent or decimal). Primary display = multiplier. */
   function mkCell(markupVal, dataAttrs, colCls){
@@ -1423,7 +1453,21 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         <th class="col-source">Price source</th>
         <th class="col-notes">Notes</th>
         <th class="no-print"></th>
-      </tr></thead>
+      </tr>
+      ${bomFilterOpen ? `<tr class="col-filter-row no-print">
+        ${selCol?'<th></th>':''}
+        <th></th>
+        <th>${cfIn('type')}</th>
+        ${allowAccessories?`<th>${cfIn('tag')}</th>`:''}
+        <th>${cfIn('mfr')}</th>
+        <th>${cfIn('part')}</th>
+        <th>${cfIn('desc')}</th>
+        <th></th><th></th><th></th><th></th><th></th><th></th>
+        <th>${cfIn('source')}</th>
+        <th>${cfIn('note')}</th>
+        <th class="no-print"></th>
+      </tr>` : ''}
+      </thead>
       <tbody>${body || ""}</tbody>
     </table>
     </div>
@@ -1578,6 +1622,8 @@ function renderPane(){
             oninput="bomFilter=this.value;applyBomFilter()" aria-label="Find in BOM">
           ${bomFilter?`<button class="bom-find-clear" onclick="bomFilter='';render()" title="Clear">✕</button>`:''}
         </div>
+        <button class="ghost ${bomFilterOpen?'active':''}" onclick="toggleBomFilters()" title="Per-column filters">⛃ Filters<span id="bomFilterBadge">${activeFilterCount()?' ('+activeFilterCount()+')':''}</span></button>
+        <button class="ghost" id="bomFilterClear" onclick="clearColFilters()" title="Clear all filters" style="display:${activeFilterCount()?'':'none'}">Clear filters</button>
         <button class="ghost" onclick="openGlobalSearch()" title="Search fixtures &amp; controls across every option in this project">🔎 Search</button>
         <div class="col-menu-wrap">
           <button class="ghost" onclick="event.stopPropagation();toggleColMenu()" title="Show / hide columns">Columns ▾</button>
