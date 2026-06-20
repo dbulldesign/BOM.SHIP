@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.20.0";
+const APP_VERSION = "1.21.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -673,20 +673,6 @@ function colKeyForField(field){
 const accExpanded = new Set();    // fixture row ids whose accessories are shown (default: hidden)
 const secCollapsed = new Set();   // section divider ids that are collapsed
 const bomSel = new Set();         // selected fixture/control row ids (bulk edit)
-let showIssues = false;           // validation review highlighting
-function toggleIssues(){ showIssues = !showIssues; render(); }
-function rowIssues(r){
-  const out = [];
-  if(numOr(r.unitCost,0)===0 && !(r.linkId && !r.linkMaster)) out.push('No unit cost');
-  if(!String(r.part||'').trim()) out.push('No part #');
-  if(!String(r.desc||'').trim()) out.push('No description');
-  return out;
-}
-function optionIssueCount(opt){
-  let n = 0;
-  ['fixtures','controls'].forEach(k=> (opt[k]||[]).forEach(r=>{ if(!r.isSection && rowIssues(r).length) n++; }));
-  return n;
-}
 function toggleBomSel(id, on){ if(on) bomSel.add(id); else bomSel.delete(id); render(); }
 let _lastBomClickId = null;   // anchor for Shift-click range selection
 /* Checkbox click with modifier support: Shift-click selects the range from the
@@ -1120,8 +1106,6 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const tagCell = allowAccessories
       ? `<td class="col-tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
       : '';
-    const issues = showIssues ? rowIssues(r) : [];
-    const issueCls = issues.length ? ' has-issue' : '';
     const grp = r.linkId ? linkInfo[r.linkId] : null;
     const linkCls = r.linkId ? (r.linkMaster ? ' link-master' : ' link-linked') : '';
     const picking = (_linkPick && allowAccessories && r.linkId!==_linkPick) ? ' link-pickable' : '';
@@ -1144,7 +1128,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       linkBtn = `<button class="rowact linkbtn${r.linkId?(r.linkMaster?' is-master':' is-linked'):''}"${chipStyle} tabindex="-1" title="${ttl}" onclick="linkAction('${kind}',${i})">${lbl}</button>`;
     }
     const stripeStyle = grp ? ` style="--lg:${grp.color}"` : '';
-    return `<tr data-rk="${kind}" data-ri="${i}" class="${linkCls}${picking}${issueCls}"${stripeStyle}${issues.length?` title="${esc(issues.join(' · '))}"`:''}>
+    return `<tr data-rk="${kind}" data-ri="${i}" class="${linkCls}${picking}"${stripeStyle}>
       ${selCell(r)}
       <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
       <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
@@ -1476,7 +1460,6 @@ function renderPane(){
             <label><input type="checkbox" ${colVis.source?'checked':''} onchange="toggleCol('source')"> Price source</label>
           </div>
         </div>
-        ${(()=>{ const ic=optionIssueCount(opt); return `<button class="ghost issue-btn${showIssues?' active':''}" onclick="toggleIssues()" title="Highlight rows missing a cost, part #, or description">⚠ Review${ic?' ('+ic+')':''}</button>`; })()}
         ${approveBtn}
         <button class="ghost" onclick="dupOption()">Duplicate</button>
         <button class="danger" onclick="delOption()">Delete option</button>
