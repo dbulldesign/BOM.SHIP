@@ -803,12 +803,14 @@
   td input.txt.fixedw{field-sizing:auto;width:100%;max-width:none}
 
   /* ===== Phase 4: linked fixtures + allowance/freight overrides ===== */
-  .linkbtn{border:none;background:none;color:#C0BCAE;font-size:.9rem;padding:4px 4px;line-height:1;cursor:pointer}
+  .linkbtn{border:none;background:none;color:#C0BCAE;font-size:.9rem;padding:4px 5px;line-height:1;cursor:pointer;
+    display:inline-flex;align-items:center;gap:3px;border-radius:10px}
   .linkbtn:hover{color:var(--amber-deep)}
-  .linkbtn.is-master{color:var(--amber-deep)}
-  .linkbtn.is-linked{color:#1763d6}
-  tr.link-master > td{box-shadow:inset 3px 0 0 0 var(--amber-deep)}
-  tr.link-linked > td{box-shadow:inset 3px 0 0 0 #7fb0ff}
+  .linkbtn.is-master,.linkbtn.is-linked{color:#fff;background:var(--lg,#888);font-size:.74rem;padding:2px 7px}
+  .linkbtn.is-master:hover,.linkbtn.is-linked:hover{filter:brightness(1.08);color:#fff}
+  .link-rel{font-family:var(--mono);font-size:.7rem;font-weight:700;letter-spacing:.02em}
+  /* coloured left stripe ties every member of a link group together (master + followers) */
+  tr.link-master > td,tr.link-linked > td{box-shadow:inset 3px 0 0 0 var(--lg,#888)}
   tr.link-pickable > td{background:var(--amber-wash)}
   body.dark tr.link-pickable > td{background:#241c0c}
   td input.linked-cost{color:var(--ink-soft);background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(23,99,214,.06) 4px,rgba(23,99,214,.06) 8px);cursor:not-allowed}
@@ -823,13 +825,21 @@
 
   /* ===== Bulk edit + library import/export ===== */
   .bom-check{margin:0 2px 0 0;vertical-align:middle;cursor:pointer}
+  /* leftmost selection column */
+  td.col-sel,th.col-sel{text-align:center;padding:0 2px;width:30px}
+  th.col-sel input,td.col-sel input{cursor:pointer;margin:0;vertical-align:middle}
+  /* The bulk-edit bar follows the active theme (light surface in light mode,
+     dark surface in dark mode) with an amber accent so it reads as a panel. */
   .bulk-bar{position:sticky;top:0;z-index:8;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-    background:var(--chip);color:#fff;border-radius:6px;padding:8px 14px;margin:0 0 10px;font-size:.82rem}
-  .bulk-bar b{color:#E9B45C}
+    background:var(--amber-wash);color:var(--ink);border:1px solid var(--amber-deep);
+    border-radius:6px;padding:8px 14px;margin:0 0 10px;font-size:.82rem}
+  body.dark .bulk-bar{background:#2A2310;border-color:var(--amber-deep);color:var(--ink)}
+  .bulk-bar b{color:var(--amber-deep)}
+  body.dark .bulk-bar b{color:var(--amber)}
   .bulk-grp{display:inline-flex;align-items:center;gap:5px}
-  .bulk-bar input{width:70px;font:inherit;font-size:.8rem;padding:3px 6px;border:1px solid rgba(255,255,255,.25);
-    border-radius:3px;background:rgba(255,255,255,.1);color:#fff}
-  .bulk-bar input::placeholder{color:rgba(255,255,255,.5)}
+  .bulk-bar input{width:70px;font:inherit;font-size:.8rem;padding:3px 6px;border:1px solid var(--rule-dark);
+    border-radius:3px;background:var(--sheet);color:var(--ink)}
+  .bulk-bar input::placeholder{color:var(--ink-soft)}
   .bulk-bar #bulkTag{width:120px}
   .bulk-bar button{padding:3px 10px;font-size:.76rem}
   .lib-io{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
@@ -860,3 +870,57 @@
   .sc-table td{padding:7px 8px;border-bottom:1px solid var(--rule);color:var(--ink)}
   .sc-table tr:last-child td{border-bottom:none}
   .sc-key{font-family:var(--mono);font-size:.8rem;color:var(--ink-soft);white-space:nowrap;width:46%}
+
+  /* ===== v1.20 UI fixes ===== */
+  /* Services (and other in-cell) dropdowns follow the theme instead of the
+     browser's default white. */
+  td select{font-family:var(--ui);font-size:.84rem;background:var(--sheet);color:var(--ink);
+    border:1px solid var(--rule-dark);border-radius:2px;padding:3px 4px;max-width:100%}
+  td select:focus{outline:none;border-color:var(--amber);background:var(--amber-wash)}
+  body.dark td select{background:#21242E;color:var(--ink);border-color:var(--rule-dark)}
+  body.dark td select:focus{background:#2A2310}
+  body.dark td select option{background:#21242E;color:var(--ink)}
+
+  /* Wrap setting: let the long free-text columns auto-size to their content —
+     and to a wrapped placeholder when empty (e.g. "Price source / date"). */
+  body.coltext-wrap td textarea.txt{field-sizing:content;min-height:1.5em;white-space:pre-wrap;word-break:break-word}
+
+  /* Settings divider */
+  .set-div{border:none;border-top:1px solid var(--rule);margin:14px 0}
+
+  /* ===== Compare options: line-item differences ===== */
+  .cmp-detail-head{margin-top:12px;text-align:center}
+  .cmp-pick-row{display:flex;flex-wrap:wrap;gap:8px 16px;margin:6px 0 10px}
+  .cmp-pick{display:inline-flex;align-items:center;gap:6px;font-size:.86rem;color:var(--ink);cursor:pointer}
+  .cmp-diffonly{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--ink-soft);cursor:pointer;margin-bottom:8px}
+  .cmp-diff-wrap{max-height:54vh;overflow:auto;border-top:1px solid var(--rule)}
+  .diff-note{font-size:.78rem;color:var(--ink-soft);padding:8px 2px}
+  .diff-table{width:100%;border-collapse:collapse;font-size:.82rem}
+  .diff-table th{position:sticky;top:0;background:var(--chip);color:#fff;text-align:right;padding:6px 8px;font-size:.74rem;
+    letter-spacing:.03em;text-transform:uppercase;z-index:1}
+  .diff-table th:first-child{text-align:left}
+  .diff-table td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:right;white-space:nowrap;color:var(--ink)}
+  .diff-table td.diff-item{text-align:left;white-space:normal}
+  .diff-cat{display:inline-block;font-size:.62rem;letter-spacing:.04em;text-transform:uppercase;color:#fff;
+    background:var(--ink-soft);border-radius:2px;padding:1px 5px;margin-right:5px;vertical-align:middle}
+  .diff-desc{display:block;font-size:.74rem;color:var(--ink-soft)}
+  .diff-qty{font-family:var(--mono);color:var(--ink-soft)}
+  tr.is-diff td{background:rgba(230,160,60,.10)}
+  body.dark tr.is-diff td{background:rgba(230,160,60,.16)}
+  td.diff-cell{font-weight:700}
+  td.diff-missing{color:var(--ink-soft)}
+  tr.diff-total td{border-top:2px solid var(--rule-dark);font-weight:700;background:var(--sheet)}
+  tr.diff-total td.low{color:var(--sell)}
+  tr.diff-total td.high{color:var(--danger)}
+  .mono{font-family:var(--mono)}
+
+  /* ===== Print: always render on white paper, even from dark mode =====
+     The dark theme is dropped at print time via JS (beforeprint), so the normal
+     light-theme variables apply. This is a safety net for any UA that prints
+     without firing beforeprint: force the light palette. */
+  @media print{
+    body.dark{ --ink:#20242C; --ink-soft:#5A6070; --paper:#FFFFFF; --sheet:#FFFFFF; --chip:#20242C; }
+    body.dark td.calc.sell{background:#fff}
+    body.dark .stamp-row.grand{background:#20242C;color:#fff}
+    .col-sel{display:none !important}
+  }
