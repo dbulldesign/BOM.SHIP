@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.9.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -160,35 +160,54 @@ const ACCESSORY_PRESETS = [
 ];
 function sectionRow(name){ return {id:uid(), isSection:true, name:name||"Section"}; }
 
-/* Services line: qty + unit (Days/Hours/Trips) + location + description + cost + markup */
-function blankService(group){
-  return {id:uid(), qty:0, unit:"Days", location:"In Office", desc:"", unitCost:0, markup:null, note:""};
+/* Services line (sell-only): qty + unit + location + description + SELL RATE.
+   No cost / no markup. Days & Trips lines carry accessory-style add-ons. */
+function blankService(opt){
+  opt = opt||{};
+  return {id:uid(), qty:0, unit:opt.unit||"Days", location:(opt.location!==undefined?opt.location:"In Office"),
+          desc:opt.desc||"", sellRate:(opt.sellRate!=null?opt.sellRate:0), note:"", addons:[]};
 }
-const SERVICE_UNITS = ["Days","Hours","Trips","Lump Sum"];
+const SERVICE_UNITS_BASE  = ["Trips","Days","Lump Sum"];          // Supplier & Controls (no Hours)
+const SERVICE_UNITS_NINJA = ["Trips","Days","Hours","Lump Sum"];  // Ninja / Design keeps Hours
 const SERVICE_LOCATIONS = ["In Office","On Site","—"];
-/* Default service line templates pulled from the BOM template (sell rates at 1.5x).
-   Stored as unit COST so that at the default markup they reproduce the template sell rates:
-     Days In Office  sell 1500  -> cost 1000
-     Days On Site    sell 2500  -> cost 1667 (≈2500/1.5)
-     Hours In Office sell 150   -> cost 100
-     Hours On Site   sell 250   -> cost 167  (≈250/1.5)
-   Expense lines (Site / Travel) are billed near cost (low markup), entered with markup 10. */
-const DEFAULT_SERVICE_LINES = [
-  {qty:0, unit:"Days",  location:"In Office", desc:"In office",      unitCost:1000, markup:null},
-  {qty:0, unit:"Days",  location:"On Site",   desc:"On site",        unitCost:1667, markup:null},
-  {qty:0, unit:"Hours", location:"In Office", desc:"In office",      unitCost:100,  markup:null},
-  {qty:0, unit:"Hours", location:"On Site",   desc:"On site",        unitCost:167,  markup:null},
-  {qty:0, unit:"Days",  location:"On Site",   desc:"Site expenses",  unitCost:0,    markup:10},
-  {qty:0, unit:"Trips", location:"—",         desc:"Travel expenses",unitCost:0,    markup:10},
+function serviceUnits(type){ return type==='ninja' ? SERVICE_UNITS_NINJA : SERVICE_UNITS_BASE; }
+
+/* Accessory-style add-on presets, by the unit they attach to (all priced as DK est). */
+const TRIP_ADDONS = [
+  {label:"Round Trip Flight",        desc:"Round Trip Flight",         sellRate:500, source:"DK EST"},
+  {label:"RT Travel – NYC Airport",  desc:"RT Travel – NYC Airport",   sellRate:75,  source:"DK EST"},
+  {label:"RT Travel – Site Airport", desc:"RT Travel – Site Airport",  sellRate:75,  source:"DK EST"},
 ];
-function defaultServiceRows(){
-  return DEFAULT_SERVICE_LINES.map(t=>({
-    id:uid(), qty:t.qty, unit:t.unit, location:t.location, desc:t.desc,
-    unitCost:t.unitCost, markup:t.markup, note:""
-  }));
+const DAY_ADDONS = [
+  {label:"Hotel",                         desc:"Hotel",                          sellRate:250, source:"DK est"},
+  {label:"Car Rental / RT Travel – Site", desc:"Car Rental / RT Travel – Site",  sellRate:75,  source:"DK est"},
+  {label:"Breakfast",                     desc:"Breakfast",                      sellRate:10,  source:"DK est"},
+  {label:"Lunch",                         desc:"Lunch",                          sellRate:20,  source:"DK est"},
+  {label:"Dinner",                        desc:"Dinner",                         sellRate:50,  source:"DK est"},
+];
+function addonsForUnit(unit){ return unit==='Trips' ? TRIP_ADDONS : (unit==='Days' ? DAY_ADDONS : null); }
+function blankServiceAddon(preset){
+  preset = preset||{};
+  return {id:uid(), desc:preset.desc||"", sellRate:(preset.sellRate!=null?preset.sellRate:0),
+          qty:null /* null = inherit the parent line's qty */, source:(preset.source!=null?preset.source:""), note:""};
 }
-function blankServiceGroup(name, withDefaults){
-  return {id:uid(), name:name||"Services", rows: withDefaults===false ? [blankService()] : defaultServiceRows()};
+
+/* Default rows per group type. Trips sits above Days; Hours only for Ninja. */
+function defaultServiceRows(type){
+  const rows = [
+    blankService({unit:"Trips", location:"—",        desc:"Travel",    sellRate:0}),
+    blankService({unit:"Days",  location:"In Office", desc:"In office", sellRate:1500}),
+    blankService({unit:"Days",  location:"On Site",   desc:"On site",   sellRate:2500}),
+  ];
+  if(type==='ninja'){
+    rows.push(blankService({unit:"Hours", location:"In Office", desc:"In office", sellRate:150}));
+    rows.push(blankService({unit:"Hours", location:"On Site",   desc:"On site",   sellRate:250}));
+  }
+  return rows;
+}
+function blankServiceGroup(name, type){
+  type = type||"supplier";
+  return {id:uid(), name:name||"Services", type:type, rows: defaultServiceRows(type)};
 }
 function blankOption(name){
   return { name:name, fixtureMarkup:50, controlMarkup:50, serviceMarkup:50,
@@ -196,9 +215,9 @@ function blankOption(name){
            approved:false, changeOrders:[],
            fixtures:[sectionRow("Section 1"), blankRow(), blankRow(), blankRow()],
            controls:[blankRow(), blankRow()],
-           services:[ blankServiceGroup("Supplier Services"),
-                      blankServiceGroup("Controls Services"),
-                      blankServiceGroup("Ninja / Design Services") ] };
+           services:[ blankServiceGroup("Supplier Services","supplier"),
+                      blankServiceGroup("Controls Services","controls"),
+                      blankServiceGroup("Ninja / Design Services","ninja") ] };
 }
 /* A change order is a mini-BOM scoped to an approved option. It inherits the
    parent option's markups but carries its own fixtures/controls/services. */
@@ -446,16 +465,19 @@ function sectionTotals(rows, defMarkup){
   });
   return {cost, sell, qty};
 }
-function serviceCalc(svc, defMarkup){
-  const mk = (svc.markup===null||svc.markup==="")? defMarkup : numOr(svc.markup,0);
-  const unitSell = Math.ceil(svc.unitCost*(1+mk/100));   // =ROUNDUP(UNIT*MARKUP,0)
-  const q = numOr(svc.qty,0);
-  return { mk, unitSell, extCost:q*svc.unitCost, extSell:q*unitSell };
+/* Services are sell-only (no cost, no Ext. cost). Ext. sell = qty × sell rate,
+   plus any accessory-style add-ons (which inherit the line's qty by default). */
+function svcAddonQty(a, parent){ return (a.qty===null||a.qty==="")? numOr(parent.qty,0) : numOr(a.qty,0); }
+function svcAddonSell(a, parent){ return svcAddonQty(a,parent) * numOr(a.sellRate,0); }
+function serviceCalc(svc){
+  const base = numOr(svc.qty,0) * numOr(svc.sellRate,0);
+  const add = (svc.addons||[]).reduce((t,a)=> t + svcAddonSell(a,svc), 0);
+  return { lineSell:base, addSell:add, extSell:base+add };
 }
-function servicesTotals(groups, defMarkup){
-  let cost=0, sell=0;
-  (groups||[]).forEach(g=> (g.rows||[]).forEach(s=>{ const c=serviceCalc(s,defMarkup); cost+=c.extCost; sell+=c.extSell; }));
-  return {cost, sell};
+function servicesTotals(groups){
+  let sell=0;
+  (groups||[]).forEach(g=> (g.rows||[]).forEach(s=>{ sell += serviceCalc(s).extSell; }));
+  return {cost:0, sell};
 }
 /* Allowance & Freight: a % of subtotal COST (per BOM template), sell = cost * markup rounded up.
    Fixtures allowance/freight use fixtures cost & markup; controls allowance uses controls cost & markup. */
@@ -1020,44 +1042,71 @@ function allowanceFreightRows(kind){
 
 /* ================= Services section ================= */
 function servicesTable(opt){
-  const defMarkup = opt.serviceMarkup!=null ? opt.serviceMarkup : opt.fixtureMarkup;
-  const defX = pct2x(defMarkup);
   const groups = opt.services || [];
-  const tot = servicesTotals(groups, defMarkup);
+  const tot = servicesTotals(groups);
+  const NC = 9;
 
   const groupHTML = groups.map((g,gi)=>{
+    const units = serviceUnits(g.type);
     const rowsHTML = (g.rows||[]).map((s,si)=>{
-      const c = serviceCalc(s, defMarkup);
+      const c = serviceCalc(s);
       const da = `data-svc-g="${gi}" data-svc-r="${si}"`;
-      const mInherit = (s.markup===null||s.markup==="");
-      const unitOpts = SERVICE_UNITS.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('');
+      const unitOpts = units.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('');
       const locOpts = SERVICE_LOCATIONS.map(l=>`<option ${s.location===l?'selected':''}>${l}</option>`).join('');
-      return `<tr>
-        <td style="width:64px"><input class="num" inputmode="decimal" value="${s.qty}" ${da} data-f="qty"></td>
-        <td style="width:92px"><select ${da} data-f="unit">${unitOpts}</select></td>
-        <td style="width:108px"><select ${da} data-f="location">${locOpts}</select></td>
-        <td style="min-width:200px"><input value="${esc(s.desc)}" placeholder="Service description" ${da} data-f="desc"></td>
-        <td style="width:96px"><input class="num" inputmode="decimal" value="${cost2(s.unitCost)}" ${da} data-f="unitCost"></td>
-        <td style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(s.markup)}" placeholder="${defX}" ${da} data-f="markup"></td>
-        <td class="calc" style="width:92px">${money(c.unitSell)}</td>
-        <td class="calc" style="width:96px">${money(c.extCost)}</td>
-        <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
-        <td style="min-width:150px"><input value="${esc(s.note??'')}" placeholder="Notes" ${da} data-f="note"></td>
+      const lineRow = `<tr>
+        <td style="width:60px"><input class="num" inputmode="decimal" value="${s.qty}" ${da} data-f="qty"></td>
+        <td style="width:90px"><select ${da} data-f="unit">${unitOpts}</select></td>
+        <td style="width:104px"><select ${da} data-f="location">${locOpts}</select></td>
+        <td style="min-width:190px"><input value="${esc(s.desc)}" placeholder="Service description" ${da} data-f="desc"></td>
+        <td style="width:104px"><input class="num" inputmode="decimal" value="${cost2(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
+        <td class="calc sell" style="width:110px">${money(c.extSell)}</td>
+        <td style="width:120px"><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
+        <td style="min-width:140px"><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
         <td style="width:52px" class="no-print row-actions">
           <button class="rowact" tabindex="-1" title="Duplicate this service line" onclick="dupService(${gi},${si})">⎘</button>
           <button class="rowdel" tabindex="-1" title="Delete service line" onclick="delService(${gi},${si})">✕</button>
         </td>
       </tr>`;
+      /* Days & Trips lines carry accessory-style add-ons (travel, hotel, meals…). */
+      const presets = addonsForUnit(s.unit);
+      let addonsHTML = '';
+      if(presets){
+        const arows = (s.addons||[]).map((a,ai)=>{
+          const ada = `data-svc-g="${gi}" data-svc-r="${si}" data-svc-a="${ai}"`;
+          const qInherit = (a.qty===null||a.qty==='');
+          return `<tr class="acc-row">
+            <td><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':a.qty}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
+            <td><span class="acc-pill">Add</span></td>
+            <td></td>
+            <td><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Add-on" ${ada} data-f="addondesc"></span></td>
+            <td><input class="num" inputmode="decimal" value="${cost2(a.sellRate)}" ${ada} data-f="addonsellRate"></td>
+            <td class="calc sell">${money(svcAddonSell(a,s))}</td>
+            <td><input value="${esc(a.source||'')}" placeholder="" ${ada} data-f="addonsource"></td>
+            <td><input value="${esc(a.note||'')}" placeholder="Notes" ${ada} data-f="addonnote"></td>
+            <td class="no-print"><button class="rowdel" title="Delete add-on" onclick="delServiceAddon(${gi},${si},${ai})">✕</button></td>
+          </tr>`;
+        }).join('');
+        const key = `svc_${gi}_${si}`;
+        const menu = `<tr class="acc-row no-print"><td class="acc-add-cell" colspan="${NC}">
+          <span class="acc-menu" data-accmenu="${key}">
+            <button class="acc-add-btn" onclick="toggleAccMenu('${key}')">+ Add ${s.unit==='Trips'?'travel':'day'} item ▾</button>
+            <span class="acc-menu-list" id="accmenu_${key}" style="display:none">
+              ${presets.map((p,pi)=>`<button onclick="addServiceAddon(${gi},${si},${pi})">${esc(p.label)} ($${p.sellRate})</button>`).join('')}
+            </span>
+          </span></td></tr>`;
+        addonsHTML = arows + menu;
+      }
+      return lineRow + addonsHTML;
     }).join('');
-    const gTot = servicesTotals([g], defMarkup);
-    return `<tr class="section-row"><td colspan="11"><div class="section-cell">
+    const gTot = servicesTotals([g]);
+    return `<tr class="section-row"><td colspan="${NC}"><div class="section-cell">
         <span class="sx">▸ SERVICES</span>
         <input value="${esc(g.name)}" placeholder="Services group" data-svc-gname="${gi}">
-        <span class="section-sub">Cost ${money(gTot.cost)} · Sell <b>${money(gTot.sell)}</b></span>
+        <span class="section-sub">Sell <b>${money(gTot.sell)}</b></span>
         <button class="rowdel no-print" title="Delete services group" onclick="delServiceGroup(${gi})">✕</button>
       </div></td></tr>
       ${rowsHTML}
-      <tr class="acc-row no-print"><td class="acc-add-cell" colspan="11">
+      <tr class="acc-row no-print"><td class="acc-add-cell" colspan="${NC}">
         <button class="acc-add-btn" onclick="addService(${gi})">+ Add service line</button>
       </td></tr>`;
   }).join('');
@@ -1065,10 +1114,7 @@ function servicesTable(opt){
   return `<div class="section">
     <div class="sec-head">
       <span class="tick svc"></span><h2>Services</h2>
-      <span class="sec-markup no-print">Default markup
-        <span class="sec-mk-pair"><input inputmode="decimal" value="${defX}" placeholder="1.5" title="Multiplier (1.5) or percent (50%)" data-svcmk></span>
-        <span class="mk-hint">× or %</span>
-      </span>
+      <span class="sec-markup no-print" style="font-size:.7rem;color:var(--ink-soft)">Sell-only · no cost</span>
     </div>
     <div class="sec-add-bar no-print">
       <button class="ghost" onclick="addServiceGroup()">+ Add services group</button>
@@ -1077,15 +1123,13 @@ function servicesTable(opt){
     <table>
       <thead><tr>
         <th class="r">Qty</th><th>Unit</th><th>Location</th><th>Description</th>
-        <th class="r">Rate / cost</th><th class="r">Markup</th>
-        <th class="r">Sell rate</th><th class="r">Ext. cost</th><th class="r">Ext. sell</th>
-        <th>Notes</th><th class="no-print"></th>
+        <th class="r">Sell rate</th><th class="r">Ext. sell</th>
+        <th>Price source</th><th>Notes</th><th class="no-print"></th>
       </tr></thead>
       <tbody>${groupHTML}</tbody>
     </table>
     </div>
     <div class="sec-foot">
-      <span class="sf-item">Services cost<b>${money(tot.cost)}</b></span>
       <span class="sf-item">Services sell<b class="sell">${money(tot.sell)}</b></span>
     </div>
   </div>`;
@@ -1234,14 +1278,15 @@ function coServicesTable(co){
       <button class="acc-add-btn no-print" onclick="addCOServiceGroup('${co.id}')">+ Add services group</button></div></div>`;
   }
   const body = groups.map((g,gi)=>{
+    const units = serviceUnits(g.type||'ninja');
     const rowsHTML=(g.rows||[]).map((s,si)=>{
-      const c=serviceCalc(s,dm);
+      const c=serviceCalc(s);
       const da=`data-co="${co.id}" data-cosvcg="${gi}" data-cosvcr="${si}"`;
       return `<tr>
         <td style="width:60px"><input class="num" value="${s.qty}" ${da} data-cosf="qty"></td>
-        <td style="width:90px"><select ${da} data-cosf="unit">${SERVICE_UNITS.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('')}</select></td>
+        <td style="width:90px"><select ${da} data-cosf="unit">${units.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('')}</select></td>
         <td style="min-width:180px"><input value="${esc(s.desc)}" placeholder="Service" ${da} data-cosf="desc"></td>
-        <td style="width:90px"><input class="num" value="${cost2(s.unitCost)}" ${da} data-cosf="unitCost"></td>
+        <td style="width:90px"><input class="num" value="${cost2(s.sellRate)}" placeholder="Sell rate" ${da} data-cosf="sellRate"></td>
         <td class="calc sell" style="width:96px">${money(c.extSell)}</td>
         <td style="width:30px" class="no-print"><button class="rowdel" onclick="delCOService('${co.id}',${gi},${si})">✕</button></td>
       </tr>`;
@@ -1253,7 +1298,7 @@ function coServicesTable(co){
   return `<div class="co-sub"><div class="co-sub-head"><span>Services</span>
       <button class="acc-add-btn no-print" onclick="addCOServiceGroup('${co.id}')">+ Add services group</button></div>
     <div class="table-scroll"><table>
-      <thead><tr><th class="r">Qty</th><th>Unit</th><th>Description</th><th class="r">Rate</th><th class="r">Ext. sell</th><th class="no-print"></th></tr></thead>
+      <thead><tr><th class="r">Qty</th><th>Unit</th><th>Description</th><th class="r">Sell rate</th><th class="r">Ext. sell</th><th class="no-print"></th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
 }
 
@@ -1574,11 +1619,21 @@ function bindPane(){
   pane.querySelectorAll("[data-svc-g]").forEach(inp=>{
     inp.addEventListener("change", e=>{
       const gi=+e.target.dataset.svcG, si=+e.target.dataset.svcR, f=e.target.dataset.f;
+      const ai=e.target.dataset.svcA;
       const s = state.options[state.current].services[gi].rows[si];
       const val = e.target.value;
+      if(ai!==undefined){                                  // add-on field
+        const a = s.addons[+ai];
+        if(f==="addonqty") a.qty = val.trim()===""? null : Math.max(0,numOr(val,0));
+        else if(f==="addonsellRate") a.sellRate = numOr(val,0);
+        else if(f==="addondesc") a.desc = val;
+        else if(f==="addonsource") a.source = val;
+        else if(f==="addonnote") a.note = val;
+        markDirty(); render(); return;
+      }
       if(f==="qty") s.qty = Math.max(0,numOr(val,0));
-      else if(f==="unitCost") s.unitCost = numOr(val,0);
-      else if(f==="markup") s.markup = parseMarkup(val);
+      else if(f==="sellRate") s.sellRate = numOr(val,0);
+      else if(f==="unit"){ s.unit = val; }                 // changing unit may change which add-ons apply
       else s[f] = val;
       markDirty(); render();
     });
@@ -1586,8 +1641,6 @@ function bindPane(){
   pane.querySelectorAll("input[data-svc-gname]").forEach(inp=>{
     inp.addEventListener("change", e=>{ state.options[state.current].services[+e.target.dataset.svcGname].name = e.target.value||"Services"; markDirty(); render(); });
   });
-  const svcMk = pane.querySelector("input[data-svcmk]");
-  if(svcMk) svcMk.addEventListener("change", e=>{ const v=parseMarkup(e.target.value); if(v!==null){ state.options[state.current].serviceMarkup=v; markDirty(); render(); } });
 
   /* For Access allowance / freight percentages */
   pane.querySelectorAll("input[data-fapct]").forEach(inp=>{
@@ -1633,7 +1686,7 @@ function bindPane(){
       const s=f.co.services[+e.target.dataset.cosvcg].rows[+e.target.dataset.cosvcr];
       const field=e.target.dataset.cosf, val=e.target.value;
       if(field==='qty') s.qty=Math.max(0,numOr(val,0));
-      else if(field==='unitCost') s.unitCost=numOr(val,0);
+      else if(field==='sellRate') s.sellRate=numOr(val,0);
       else s[field]=val;
       markDirty(); render();
     });
@@ -1757,7 +1810,7 @@ document.addEventListener('click', e=>{ if(!e.target.closest('.acc-menu')) close
 
 /* ---- Services actions ---- */
 function ensureServices(){ const o=state.options[state.current]; if(!o.services) o.services=[]; return o.services; }
-function addServiceGroup(){ ensureServices().push(blankServiceGroup("Services")); markDirty(); render(); }
+function addServiceGroup(){ ensureServices().push({id:uid(), name:"Services", type:"ninja", rows:[blankService()]}); markDirty(); render(); }
 function delServiceGroup(gi){ ensureServices().splice(gi,1); markDirty(); render(); }
 function addService(gi){ ensureServices()[gi].rows.push(blankService()); markDirty(); render(); }
 function delService(gi,si){ ensureServices()[gi].rows.splice(si,1); markDirty(); render(); }
@@ -1765,8 +1818,18 @@ function dupService(gi,si){
   const rows = ensureServices()[gi].rows;
   if(!rows[si]) return;
   const copy = JSON.parse(JSON.stringify(rows[si])); copy.id = uid();
+  (copy.addons||[]).forEach(a=>a.id=uid());
   rows.splice(si+1, 0, copy); markDirty(); render();
 }
+/* Service line add-ons (accessory-style, on Days/Trips lines) */
+function addServiceAddon(gi, si, presetIdx){
+  const s = ensureServices()[gi].rows[si]; if(!s) return;
+  if(!s.addons) s.addons = [];
+  const presets = addonsForUnit(s.unit) || [];
+  s.addons.push(blankServiceAddon(presets[presetIdx]));
+  closeAccMenus(); markDirty(); render();
+}
+function delServiceAddon(gi, si, ai){ const s=ensureServices()[gi].rows[si]; if(s&&s.addons){ s.addons.splice(ai,1); markDirty(); render(); } }
 
 /* ---- Duplicate a single fixture/control row (with fresh ids) ---- */
 function dupRow(kind, i){
@@ -2809,20 +2872,23 @@ function exportEstimateXLSX(){
     sectionToRows('LIGHT FIXTURES', opt.fixtures, opt.fixtureMarkup, true);
     sectionToRows('LIGHTING CONTROLS', opt.controls, opt.controlMarkup, false);
 
-    /* services */
-    const svcDm = opt.serviceMarkup!=null?opt.serviceMarkup:opt.fixtureMarkup;
-    const anySvc = (opt.services||[]).some(g=>(g.rows||[]).some(s=>s.qty>0||s.desc));
+    /* services (sell-only) */
+    const anySvc = (opt.services||[]).some(g=>(g.rows||[]).some(s=>s.qty>0||s.desc||(s.addons||[]).length));
     if(anySvc){
       aoa.push(['SERVICES']);
-      aoa.push(['Qty','Unit','Location','Description','','', 'Rate','Markup %','Sell','Ext. cost','Ext. sell']);
+      aoa.push(['Qty','Unit','Location','Description','Sell rate','Ext. sell','Price source','Notes']);
       (opt.services||[]).forEach(g=>{
-        if(!(g.rows||[]).some(s=>s.qty>0||s.desc)) return;
+        if(!(g.rows||[]).some(s=>s.qty>0||s.desc||(s.addons||[]).length)) return;
         aoa.push(['  '+(g.name||'Services')]);
         (g.rows||[]).forEach(s=>{
-          if(!s.desc && !(s.qty>0)) return;
-          const c = serviceCalc(s, svcDm);
+          if(!s.desc && !(s.qty>0) && !(s.addons||[]).length) return;
+          const c = serviceCalc(s);
           moneyRows.push(aoa.length);
-          aoa.push([numOr(s.qty,0), s.unit||'', s.location||'', s.desc||'', '', '', numOr(s.unitCost,0), pct2x(s.markup===null?svcDm:s.markup), c.unitSell, c.extCost, c.extSell]);
+          aoa.push([numOr(s.qty,0), s.unit||'', s.location||'', s.desc||'', numOr(s.sellRate,0), c.lineSell, s.source||'', s.note||'']);
+          (s.addons||[]).forEach(a=>{
+            moneyRows.push(aoa.length);
+            aoa.push(['  '+svcAddonQty(a,s), '', '', '   + '+(a.desc||''), numOr(a.sellRate,0), svcAddonSell(a,s), a.source||'', a.note||'']);
+          });
         });
       });
       aoa.push([]);
@@ -3386,16 +3452,29 @@ function normAccessory(a){ return { id:a.id||uid(), desc:String(a.desc??""), par
   markup:(a.markup===null||a.markup===undefined||a.markup==="")? null : numOr(a.markup,0),
   note:String(a.note??""), source:String(a.source??"") }; }
 function normServiceGroup(g){
-  return { id:g.id||uid(), name:String(g.name||'Services'),
+  const type = ['supplier','controls','ninja'].includes(g.type) ? g.type
+             : (/ninja|design/i.test(g.name||'') ? 'ninja' : 'supplier');
+  return { id:g.id||uid(), name:String(g.name||'Services'), type,
     rows: Array.isArray(g.rows)? g.rows.map(normService) : [] };
 }
+function normServiceAddon(a){
+  return { id:a.id||uid(), desc:String(a.desc??""), sellRate:numOr(a.sellRate,0),
+    qty:(a.qty===null||a.qty===undefined||a.qty==="")? null : numOr(a.qty,0),
+    source:String(a.source??""), note:String(a.note??"") };
+}
 function normService(s){
+  /* Migrate legacy cost+markup rows to a sell rate so prior sell amounts are preserved. */
+  let sellRate;
+  if(s.sellRate!==undefined && s.sellRate!==null && s.sellRate!=="") sellRate = numOr(s.sellRate,0);
+  else if(s.unitCost!==undefined){ const mk = (s.markup===null||s.markup===undefined||s.markup==="")?50:numOr(s.markup,0); sellRate = Math.ceil(numOr(s.unitCost,0)*(1+mk/100)); }
+  else sellRate = 0;
+  const allUnits = ['Trips','Days','Hours','Lump Sum'];
   return { id:s.id||uid(), qty:numOr(s.qty,0),
-    unit: SERVICE_UNITS.includes(s.unit)? s.unit : 'Days',
+    unit: allUnits.includes(s.unit)? s.unit : 'Days',
     location: SERVICE_LOCATIONS.includes(s.location)? s.location : 'In Office',
-    desc:String(s.desc??""), unitCost:numOr(s.unitCost,0),
-    markup:(s.markup===null||s.markup===undefined||s.markup==="")? null : numOr(s.markup,0),
-    note:String(s.note??"") };
+    desc:String(s.desc??""), sellRate,
+    source:String(s.source??""), note:String(s.note??""),
+    addons: Array.isArray(s.addons)? s.addons.map(normServiceAddon) : [] };
 }
 function normChangeOrder(co){
   return { id:co.id||uid(), number:co.number||1, name:String(co.name||'Change Order'),
