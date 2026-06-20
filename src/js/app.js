@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.33.0";
+const APP_VERSION = "1.34.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2996,6 +2996,23 @@ function shipStatus(m){
 }
 /* "outstanding" = not yet delivered (still needs action) */
 function isOutstanding(m){ return !m.delivery; }
+/* ETA color coding (confirmed precedence):
+   delivered → green (always wins); else ETA on/before today → red;
+   else ETA within the current calendar week (Mon–Sun) → yellow; else none. */
+function etaColor(m){
+  if(!m) return '';
+  if(m.delivery) return 'green';
+  const raw = m.estShip; if(!raw) return '';
+  const t = Date.parse(raw); if(isNaN(t)) return '';
+  const eta = new Date(t); eta.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(eta.getTime() <= today.getTime()) return 'red';
+  const dow = (today.getDay()+6)%7;                 // 0=Mon … 6=Sun
+  const weekStart = new Date(today); weekStart.setDate(today.getDate()-dow);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
+  if(eta.getTime() >= weekStart.getTime() && eta.getTime() <= weekEnd.getTime()) return 'yellow';
+  return '';
+}
 function toggleBackorder(rowId){
   const m = getMeta(rowId);
   m.backordered = !m.backordered;
@@ -3294,7 +3311,8 @@ function renderShipping(){
       : `<td style="min-width:70px">${esc(l.kind)}${l.isLinear?` <span class="lin-pill">${l.tag==='Track Lighting'?'Trk':'Lin'}</span>`:''}${l.isCO?` <span class="co-pill">CO</span>`:''}</td>`;
     const addPiece = l.isLinear
       ? `<button class="add-piece-btn no-print" title="Add a length/piece line" onclick="addPiece('${l.id}')">+ pc</button>` : '';
-    return `<tr class="${shipSel.has(l.id)?'sel':''}${isAcc?' acc-ship-row':''}${l.isCO?' co-ship-row':''}">
+    const ec = etaColor(l.meta);
+    return `<tr class="${shipSel.has(l.id)?'sel':''}${isAcc?' acc-ship-row':''}${l.isCO?' co-ship-row':''}${ec?' eta-'+ec:''}">
       <td class="chk"><input type="checkbox" ${shipSel.has(l.id)?'checked':''} onchange="toggleShipSel('${l.id}',this.checked)"></td>
       <td style="min-width:96px">${isAcc?'':esc(l.optName)}</td>
       ${catCell}
