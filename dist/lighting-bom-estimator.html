@@ -1092,7 +1092,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.25.0";
+const APP_VERSION = "1.26.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1503,6 +1503,11 @@ function numOr(v,d){ const n=parseFloat(String(v).replace(/[$,%\s]/g,"")); retur
 function money(n){ return "$"+ n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 /* format a cost value with 2 decimals for display in editable inputs (e.g. 39 -> "39.00"), no thousands comma */
 function cost2(n){ return numOr(n,0).toFixed(2); }
+/* For user-fillable number cells: render an EMPTY field (with a faded "0"/"0.00"
+   placeholder) when the value is zero, so you can click and type a number without
+   first deleting a "0" — the same feel as the text fields. */
+function costVal(v){ return numOr(v,0)===0 ? "" : cost2(v); }
+function qtyVal(v){ return numOr(v,0)===0 ? "" : v; }
 function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
 
@@ -2203,8 +2208,8 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const picking = (_linkPick && allowAccessories && r.linkId!==_linkPick) ? ' link-pickable' : '';
     const isLinkedFollower = r.linkId && !r.linkMaster;
     const costCell = isLinkedFollower
-      ? `<td style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
-      : `<td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-f="unitCost"></td>`;
+      ? `<td style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
+      : `<td style="width:88px"><input class="num" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost"></td>`;
     /* Link control: the master shows a "★ Master A" chip; each follower shows a
        "🔗 A → F1" chip naming the master it's linked to. The group letter + colour
        (and the matching left stripe) tie members together; hovering any member
@@ -2224,7 +2229,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const linkAttr = grp ? ` data-link="${r.linkId}"` : '';
     return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${linkCls}${picking}"${stripeStyle}>
       ${selCell(r)}
-      <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-f="qty"></td>
+      <td style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-f="qty"></td>
       <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
       <td style="width:120px"><input list="${allowAccessories?'memMfr':'ctrlMfr'}" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
@@ -2264,13 +2269,13 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       const mInherit = (a.markup===null||a.markup==="");
       return `<tr class="acc-row">
         ${selCol?'<td class="col-sel no-print"></td>':''}
-        <td style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':a.qty}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
+        <td style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
         <td style="width:78px"><span class="acc-pill">Acc</span></td>
         <td class="col-tag" style="width:118px"></td>
         <td style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
         <td style="width:130px" class="col-part">${txtField(a.part, da, 'accpart', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:a.part})}</td>
         <td style="min-width:170px" class="col-desc"><span class="acc-tag">${txtField(a.desc, da, 'accdesc', 'Accessory (louver, lens, filter…)', {list:'memDesc'})}</span></td>
-        <td style="width:88px"><input class="num" inputmode="decimal" value="${cost2(a.unitCost)}" ${da} data-f="accunitCost"></td>
+        <td style="width:88px"><input class="num" inputmode="decimal" value="${costVal(a.unitCost)}" placeholder="0.00" ${da} data-f="accunitCost"></td>
         <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(a)}" placeholder="1" title="Manufacturer multiplier" ${da} data-f="accmfrMult"></td>
         <td class="col-markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
         <td class="calc" style="width:88px">${money(ac.unitSell)}</td>
@@ -2415,8 +2420,8 @@ function allowanceFreightRows(kind){
     return `<div class="af-line">
       <span class="af-label">${label}</span>
       <span class="af-pctwrap no-print"><input class="af-pct num" inputmode="decimal" value="${numOr(pctVal,0)}" data-fapct="${pctField}" title="% of section cost"> %</span>
-      <span class="af-cost">Cost <input class="af-num num${numOrNull(costOv)!=null?' af-ov':''}" inputmode="decimal" value="${cost2(cost)}" data-afov="${costOvField}" title="Type to override; clear to use the %"></span>
-      <span class="af-sell">Sell <input class="af-num num sell${numOrNull(sellOv)!=null?' af-ov':''}" inputmode="decimal" value="${cost2(sell)}" data-afov="${sellOvField}" title="Type to override; clear to use the %"></span>
+      <span class="af-cost">Cost <input class="af-num num${numOrNull(costOv)!=null?' af-ov':''}" inputmode="decimal" value="${costVal(cost)}" placeholder="0.00" data-afov="${costOvField}" title="Type to override; clear to use the %"></span>
+      <span class="af-sell">Sell <input class="af-num num sell${numOrNull(sellOv)!=null?' af-ov':''}" inputmode="decimal" value="${costVal(sell)}" placeholder="0.00" data-afov="${sellOvField}" title="Type to override; clear to use the %"></span>
     </div>`;
   }
   if(kind==='fixtures'){
@@ -2447,11 +2452,11 @@ function servicesTable(opt){
       const unitOpts = units.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('');
       const locOpts = SERVICE_LOCATIONS.map(l=>`<option ${s.location===l?'selected':''}>${l}</option>`).join('');
       const lineRow = `<tr>
-        <td style="width:60px"><input class="num" inputmode="decimal" value="${s.qty}" ${da} data-f="qty"></td>
+        <td style="width:60px"><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
         <td style="width:90px"><select ${da} data-f="unit">${unitOpts}</select></td>
         <td style="width:104px"><select ${da} data-f="location">${locOpts}</select></td>
         <td style="min-width:190px"><input value="${esc(s.desc)}" placeholder="Service description" ${da} data-f="desc"></td>
-        <td style="width:104px"><input class="num" inputmode="decimal" value="${cost2(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
+        <td style="width:104px"><input class="num" inputmode="decimal" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
         <td class="calc sell" style="width:110px">${money(c.extSell)}</td>
         <td style="width:120px"><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
         <td style="min-width:140px"><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
@@ -2468,11 +2473,11 @@ function servicesTable(opt){
           const ada = `data-svc-g="${gi}" data-svc-r="${si}" data-svc-a="${ai}"`;
           const qInherit = (a.qty===null||a.qty==='');
           return `<tr class="acc-row">
-            <td><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':a.qty}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
+            <td><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
             <td><span class="acc-pill">Add</span></td>
             <td></td>
             <td><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Add-on" ${ada} data-f="addondesc"></span></td>
-            <td><input class="num" inputmode="decimal" value="${cost2(a.sellRate)}" ${ada} data-f="addonsellRate"></td>
+            <td><input class="num" inputmode="decimal" value="${costVal(a.sellRate)}" placeholder="0.00" ${ada} data-f="addonsellRate"></td>
             <td class="calc sell">${money(svcAddonSell(a,s))}</td>
             <td><input value="${esc(a.source||'')}" placeholder="" ${ada} data-f="addonsource"></td>
             <td><input value="${esc(a.note||'')}" placeholder="Notes" ${ada} data-f="addonnote"></td>
@@ -2658,12 +2663,12 @@ function coSectionTable(co, kind, label){
     const c = rowCalc(r, dm);
     const da = `data-co="${co.id}" data-cok="${kind}" data-coi="${i}"`;
     return `<tr>
-      <td style="width:54px"><input class="num" inputmode="numeric" value="${r.qty}" ${da} data-cof="qty"></td>
+      <td style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-cof="qty"></td>
       <td style="width:78px"><input class="up" value="${esc(r.type)}" placeholder="F1" ${da} data-cof="type"></td>
       <td style="width:120px"><input value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-cof="mfr"></td>
       <td style="min-width:160px"><input value="${esc(r.desc)}" placeholder="Description" ${da} data-cof="desc"></td>
       <td style="width:120px"><input class="partno" value="${esc(r.part)}" placeholder="Part #" title="${esc(r.part)}" style="font-family:var(--mono)" ${da} data-cof="part"></td>
-      <td style="width:84px"><input class="num" inputmode="decimal" value="${cost2(r.unitCost)}" ${da} data-cof="unitCost"></td>
+      <td style="width:84px"><input class="num" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-cof="unitCost"></td>
       <td style="width:70px"><input class="num${(r.markup===null||r.markup==='')?' mk-inherit':''}" inputmode="decimal" value="${(r.markup===null||r.markup==='')?'':pct2x(r.markup)}" placeholder="${pct2x(dm)}" ${da} data-cof="markup"></td>
       <td class="calc" style="width:88px">${money(c.unitSell)}</td>
       <td class="calc sell" style="width:96px">${money(c.extSell)}</td>
@@ -2693,10 +2698,10 @@ function coServicesTable(co){
       const c=serviceCalc(s);
       const da=`data-co="${co.id}" data-cosvcg="${gi}" data-cosvcr="${si}"`;
       return `<tr>
-        <td style="width:60px"><input class="num" value="${s.qty}" ${da} data-cosf="qty"></td>
+        <td style="width:60px"><input class="num" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-cosf="qty"></td>
         <td style="width:90px"><select ${da} data-cosf="unit">${units.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('')}</select></td>
         <td style="min-width:180px"><input value="${esc(s.desc)}" placeholder="Service" ${da} data-cosf="desc"></td>
-        <td style="width:90px"><input class="num" value="${cost2(s.sellRate)}" placeholder="Sell rate" ${da} data-cosf="sellRate"></td>
+        <td style="width:90px"><input class="num" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-cosf="sellRate"></td>
         <td class="calc sell" style="width:96px">${money(c.extSell)}</td>
         <td style="width:30px" class="no-print"><button class="rowdel" onclick="delCOService('${co.id}',${gi},${si})">✕</button></td>
       </tr>`;
