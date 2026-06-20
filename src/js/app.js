@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.16.0";
+const APP_VERSION = "1.17.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3964,13 +3964,39 @@ async function newProject(){
   state = blankProject(); dirty=false; resetHistory(); render();
 }
 window.addEventListener("beforeunload", e=>{ if(dirty){ e.preventDefault(); e.returnValue=""; } });
+/* Keyboard shortcuts (kept in sync with the help popup, openShortcuts). */
+const SHORTCUTS = [
+  ['Ctrl/⌘ + S', 'Save project'],
+  ['Ctrl/⌘ + O', 'Open project'],
+  ['Ctrl/⌘ + Z', 'Undo'],
+  ['Ctrl/⌘ + Y  ·  Ctrl/⌘ + Shift + Z', 'Redo'],
+  ['Ctrl/⌘ + F', 'Find in this option'],
+  ['Ctrl/⌘ + K', 'Search all options'],
+  ['Ctrl/⌘ + Enter', 'Add a fixture row'],
+  ['Enter', 'In the last row, add a new row'],
+  ['Alt + N', 'New option'],
+  ['Alt + 1 / 2 / 3', 'Estimate / Procurement / Ship advice'],
+  ['?', 'Show this shortcuts list'],
+  ['Esc', 'Close a popup'],
+];
+function openShortcuts(){
+  const rows = SHORTCUTS.map(([k,d])=>`<tr><td class="sc-key">${esc(k)}</td><td>${esc(d)}</td></tr>`).join('');
+  openModal({ title:'Keyboard shortcuts', wide:false, cancelLabel:'Close',
+    bodyHTML:`<table class="sc-table">${rows}</table>` });
+}
 window.addEventListener("keydown", e=>{
   const mod = e.ctrlKey||e.metaKey;
+  const t = e.target;
+  const editable = t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.tagName==='SELECT' || t.isContentEditable);
+  /* "?" opens the shortcuts help (only when not typing in a field) */
+  if(!mod && !e.altKey && e.key==='?' && !editable){ e.preventDefault(); openShortcuts(); return; }
   /* Undo / Redo. Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo. */
   if(mod && e.key.toLowerCase()==="z" && !e.shiftKey){ e.preventDefault(); undo(); return; }
   if(mod && (e.key.toLowerCase()==="y" || (e.key.toLowerCase()==="z" && e.shiftKey))){ e.preventDefault(); redo(); return; }
   if(mod && e.key.toLowerCase()==="s"){ e.preventDefault(); saveProject(); return; }
   if(mod && e.key.toLowerCase()==="o"){ e.preventDefault(); openClick(); return; }
+  /* Ctrl/Cmd+K → search across all options */
+  if(mod && e.key.toLowerCase()==="k"){ e.preventDefault(); openGlobalSearch(); return; }
   /* Ctrl/Cmd+F → focus the BOM find box (estimate view) */
   if(mod && e.key.toLowerCase()==="f" && view==='estimate'){
     const f=document.getElementById('bomFind'); if(f){ e.preventDefault(); f.focus(); f.select(); } return;
