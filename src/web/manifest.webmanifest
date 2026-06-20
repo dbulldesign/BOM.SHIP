@@ -10,5 +10,8 @@
   "theme_color": "#14181f",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/json": [".json", ".lbom"] } }
   ]
 }

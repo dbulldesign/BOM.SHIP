@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.11.0";
+const APP_VERSION = "1.12.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3722,3 +3722,19 @@ applyColVis();
 applySettings();
 resetHistory();
 document.addEventListener('click', ()=>{ const m=document.getElementById('colMenu'); if(m) m.style.display='none'; });
+
+/* PWA file handler: when the installed app is launched by double-clicking a
+   project file, load it — and keep the handle so Save writes back to that file.
+   (Only fires in the hosted/installed app; harmless in the offline file.) */
+if(typeof window!=='undefined' && 'launchQueue' in window && window.launchQueue && window.launchQueue.setConsumer){
+  window.launchQueue.setConsumer(async (launchParams)=>{
+    if(!launchParams || !launchParams.files || !launchParams.files.length) return;
+    try{
+      const handle = launchParams.files[0];
+      const file = await handle.getFile();
+      const text = await file.text();
+      fileHandle = handle;                 // enables Save -> write back to this same file
+      loadFromText(text, file.name);
+    }catch(e){ /* ignore — user can still Open… manually */ }
+  });
+}
