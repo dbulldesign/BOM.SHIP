@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.15.0";
+const APP_VERSION = "1.16.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -229,12 +229,25 @@ function blankChangeOrder(num, parent){
            allowancePct:0, freightPct:0, controlAllowancePct:0,
            fixtures:[blankRow()], controls:[], services:[] };
 }
+/* Per-project defaults — drive new options and can be exported/imported to share
+   the same setup across projects. */
+const DEFAULT_DEFAULTS = { company:"Focus Lighting", taxRate:8.875, taxLocation:"New York",
+  fixtureMarkup:50, controlMarkup:50, serviceMarkup:50, allowancePct:1, freightPct:5, controlAllowancePct:1 };
 function blankProject(){
-  return { name:"", jobCode:"", client:"", preparedBy:"", company:"Focus Lighting", date:new Date().toLocaleDateString(),
-           taxRate:8.875, taxLocation:"New York", taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
+  const d = {...DEFAULT_DEFAULTS};
+  return { name:"", jobCode:"", client:"", preparedBy:"", company:d.company, date:new Date().toLocaleDateString(),
+           taxRate:d.taxRate, taxLocation:d.taxLocation, taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
            shipMeta:{}, invoices:[], shipAdvices:[], savedAddresses:[],
-           memory:{mfr:[],desc:[],type:[]}, customTags:[] };
+           memory:{mfr:[],desc:[],type:[]}, customTags:[], defaults:d };
 }
+/* Apply default markups / allowance / freight onto an option object. */
+function applyDefaultsToOption(o, d){
+  o.fixtureMarkup = numOr(d.fixtureMarkup,50); o.controlMarkup = numOr(d.controlMarkup,50);
+  o.serviceMarkup = numOr(d.serviceMarkup,50);
+  o.allowancePct = numOr(d.allowancePct,1); o.freightPct = numOr(d.freightPct,5);
+  o.controlAllowancePct = numOr(d.controlAllowancePct,1);
+}
+function ensureDefaults(){ if(!state.defaults || typeof state.defaults!=='object') state.defaults={...DEFAULT_DEFAULTS}; return state.defaults; }
 let state = blankProject();
 let dirty = false;
 let lastSavedAt = null;     // timestamp of last successful file save
@@ -700,6 +713,120 @@ function openSettings(){
           if(cancel) cancel.textContent = 'Cancel';
         });
       });
+    }
+  });
+}
+
+/* ================= Per-project defaults ================= */
+function normDefaults(d){
+  const o = {...DEFAULT_DEFAULTS};
+  if(d && typeof d==='object'){
+    if(typeof d.company==='string') o.company = d.company;
+    if(typeof d.taxLocation==='string') o.taxLocation = d.taxLocation;
+    ['taxRate','fixtureMarkup','controlMarkup','serviceMarkup','allowancePct','freightPct','controlAllowancePct'].forEach(k=>{
+      if(d[k]!==undefined && d[k]!==null && d[k]!=='') o[k] = numOr(d[k], o[k]);
+    });
+  }
+  return o;
+}
+function applyDefaultsNow(){
+  const d = ensureDefaults();
+  state.company = d.company; state.taxRate = numOr(d.taxRate,8.875); state.taxLocation = d.taxLocation;
+  state.options.forEach(o=> applyDefaultsToOption(o, d));
+  markDirty(); render(); toast('Defaults applied to this project');
+}
+function exportDefaults(){ downloadJSON('lighting-bom-defaults.json', {app:'lbom-defaults', defaults:ensureDefaults()}); toast('Defaults exported'); }
+function importDefaults(text){
+  try{
+    const j = JSON.parse(text);
+    state.defaults = normDefaults(j.defaults || j);
+    applyDefaultsNow();
+    toast('Defaults imported & applied');
+  }catch(e){ toast('Could not read that defaults file'); }
+}
+function openProjectDefaults(){
+  const d = ensureDefaults();
+  const mkx = v => pct2x(numOr(v,0));
+  const body = `
+    <p class="paste-help">Defaults for <b>new options</b> in this project. Save them to a file and import into other projects to reuse the same setup. Markups accept a multiplier (1.5) or percent (50%).</p>
+    <div class="def-grid">
+      <label>Company<input data-def="company" value="${esc(d.company||'')}"></label>
+      <label>Tax rate %<input data-def="taxRate" class="num" inputmode="decimal" value="${numOr(d.taxRate,0)}"></label>
+      <label>Tax location<input data-def="taxLocation" list="usStatesList" value="${esc(d.taxLocation||'')}"></label>
+      <label>Fixtures markup<input data-def="fixtureMarkup" class="num" inputmode="decimal" value="${mkx(d.fixtureMarkup)}"></label>
+      <label>Controls markup<input data-def="controlMarkup" class="num" inputmode="decimal" value="${mkx(d.controlMarkup)}"></label>
+      <label>Services markup<input data-def="serviceMarkup" class="num" inputmode="decimal" value="${mkx(d.serviceMarkup)}"></label>
+      <label>Allowance % (fixtures)<input data-def="allowancePct" class="num" inputmode="decimal" value="${numOr(d.allowancePct,0)}"></label>
+      <label>Freight % (fixtures)<input data-def="freightPct" class="num" inputmode="decimal" value="${numOr(d.freightPct,0)}"></label>
+      <label>Allowance % (controls)<input data-def="controlAllowancePct" class="num" inputmode="decimal" value="${numOr(d.controlAllowancePct,0)}"></label>
+    </div>
+    <div class="lib-io">
+      <button class="ghost" id="defApply">Apply to all options now</button>
+      <button class="ghost" id="defExport">⬇ Export</button>
+      <button class="ghost" id="defImport">⬆ Import…</button>
+      <input type="file" id="defImportFile" accept=".json" style="display:none">
+    </div>`;
+  openModal({
+    title:'Project defaults', bodyHTML:body, wide:true, cancelLabel:'Close',
+    onOpen(back){
+      back.querySelectorAll('[data-def]').forEach(inp=>{
+        inp.addEventListener('change', ()=>{
+          const k = inp.dataset.def, v = inp.value;
+          const dd = ensureDefaults();
+          if(k==='company'||k==='taxLocation') dd[k] = v;
+          else if(k==='fixtureMarkup'||k==='controlMarkup'||k==='serviceMarkup'){ const p=parseMarkup(v); if(p!==null) dd[k]=p; }
+          else dd[k] = numOr(v,0);
+          markDirty();
+        });
+      });
+      back.querySelector('#defApply').addEventListener('click', applyDefaultsNow);
+      back.querySelector('#defExport').addEventListener('click', exportDefaults);
+      const imp = back.querySelector('#defImportFile');
+      back.querySelector('#defImport').addEventListener('click', ()=> imp.click());
+      imp.addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ importDefaults(rd.result); closeModal(); }; rd.readAsText(f); e.target.value=''; });
+    }
+  });
+}
+
+/* ================= Search across all options ================= */
+function searchAllOptions(q){
+  q = String(q||'').trim().toLowerCase();
+  if(!q) return [];
+  const out = [];
+  state.options.forEach((o,oi)=>{
+    ['fixtures','controls'].forEach(kind=>{
+      (o[kind]||[]).forEach((r,ri)=>{
+        if(r.isSection) return;
+        const hay = [r.type,r.mfr,r.desc,r.part,r.tag,r.note].join(' ').toLowerCase();
+        if(hay.includes(q)) out.push({oi, optName:o.name, kind, r});
+      });
+    });
+  });
+  return out;
+}
+function openGlobalSearch(){
+  const results = (q)=>{
+    const hits = searchAllOptions(q);
+    if(!q.trim()) return `<div class="lib-empty">Type to search every option's fixtures &amp; controls.</div>`;
+    if(!hits.length) return `<div class="lib-empty">No matches for "${esc(q)}".</div>`;
+    return `<div class="lib-list">${hits.slice(0,300).map(h=>`<button class="gs-item" data-oi="${h.oi}" data-q="${esc(q)}">
+        <span class="gs-opt">${esc(h.optName)}</span>
+        <span class="lib-type">${esc(h.r.type||'—')}</span>
+        <span class="lib-desc">${esc(h.r.desc||'')}${h.r.part?' · '+esc(h.r.part):''}</span>
+        <span class="gs-kind">${h.kind==='controls'?'Control':'Fixture'}</span>
+      </button>`).join('')}</div>`;
+  };
+  const body = `<input class="lib-search" id="gsSearch" placeholder="Search all options — type, part, description, mfr, tag, note…" autocomplete="off">
+    <div id="gsWrap">${results('')}</div>`;
+  openModal({
+    title:'Search all options', bodyHTML:body, wide:true, cancelLabel:'Close',
+    onOpen(back){
+      const wrap = back.querySelector('#gsWrap'); const search = back.querySelector('#gsSearch');
+      const bind = ()=> wrap.querySelectorAll('.gs-item').forEach(b=> b.addEventListener('click', ()=>{
+        const oi = +b.dataset.oi; closeModal(); selectOption(oi); bomFilter = b.dataset.q; render();
+      }));
+      search.addEventListener('input', ()=>{ wrap.innerHTML = results(search.value); bind(); });
+      bind(); search.focus();
     }
   });
 }
@@ -1223,10 +1350,11 @@ function renderPane(){
       <input value="${esc(opt.name)}" data-optname aria-label="Option name">
       <div class="opt-tools no-print">
         <div class="bom-find">
-          <input id="bomFind" placeholder="Find type / part / description…" value="${esc(bomFilter)}"
+          <input id="bomFind" placeholder="Find in this option…" value="${esc(bomFilter)}"
             oninput="bomFilter=this.value;applyBomFilter()" aria-label="Find in BOM">
           ${bomFilter?`<button class="bom-find-clear" onclick="bomFilter='';render()" title="Clear">✕</button>`:''}
         </div>
+        <button class="ghost" onclick="openGlobalSearch()" title="Search across all options">🔎 All options</button>
         <div class="col-menu-wrap">
           <button class="ghost" onclick="event.stopPropagation();toggleColMenu()" title="Show / hide columns">Columns ▾</button>
           <div class="col-menu" id="colMenu" onclick="event.stopPropagation()">
@@ -2197,7 +2325,7 @@ function importLibrary(kind, text){
   }catch(e){ toast('Could not read that library file'); }
 }
 
-function addOption(){ state.options.push(blankOption("Option "+(state.options.length+1))); state.current=state.options.length-1; markDirty(); render(); }
+function addOption(){ const o=blankOption("Option "+(state.options.length+1)); applyDefaultsToOption(o, ensureDefaults()); state.options.push(o); state.current=state.options.length-1; markDirty(); render(); }
 /* Switching the active option is not itself an undoable edit. Flush any pending
    edit into history, switch, then re-sync the history base so undo doesn't jump tabs. */
 function selectOption(i){ commitHistory(); state.current=i; render(); _historyBase = snapshot(); updateUndoButtons(); }
@@ -3556,7 +3684,8 @@ function applyProject(d){
     shipAdvices: Array.isArray(d.shipAdvices)? d.shipAdvices.map(normAdvice) : [],
     savedAddresses: Array.isArray(d.savedAddresses)? d.savedAddresses.map(normAddress) : [],
     memory: normMemory(d.memory),
-    customTags: Array.isArray(d.customTags)? d.customTags.map(v=>String(v)).filter(Boolean) : []
+    customTags: Array.isArray(d.customTags)? d.customTags.map(v=>String(v)).filter(Boolean) : [],
+    defaults: normDefaults(d.defaults)
   };
   if(state.options.length===0) state.options.push(blankOption("Option 1"));
   state.options.forEach(sanitizeLinks);   // repair link groups (single master, ≥2 members)
