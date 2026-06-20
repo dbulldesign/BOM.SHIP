@@ -820,3 +820,16 @@
   .af-num.af-ov{border-color:var(--amber-deep);background:var(--amber-wash)}
   body.dark .af-num.af-ov{background:#2A2310}
   .af-cost,.af-sell{display:inline-flex;align-items:center;gap:5px}
+
+  /* ===== Bulk edit + library import/export ===== */
+  .bom-check{margin:0 2px 0 0;vertical-align:middle;cursor:pointer}
+  .bulk-bar{position:sticky;top:0;z-index:8;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:var(--chip);color:#fff;border-radius:6px;padding:8px 14px;margin:0 0 10px;font-size:.82rem}
+  .bulk-bar b{color:#E9B45C}
+  .bulk-grp{display:inline-flex;align-items:center;gap:5px}
+  .bulk-bar input{width:70px;font:inherit;font-size:.8rem;padding:3px 6px;border:1px solid rgba(255,255,255,.25);
+    border-radius:3px;background:rgba(255,255,255,.1);color:#fff}
+  .bulk-bar input::placeholder{color:rgba(255,255,255,.5)}
+  .bulk-bar #bulkTag{width:120px}
+  .bulk-bar button{padding:3px 10px;font-size:.76rem}
+  .lib-io{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
