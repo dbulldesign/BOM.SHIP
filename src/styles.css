@@ -1052,3 +1052,18 @@
   body.dark tr.eta-green:not(.sel) > td{background:rgba(46,139,87,.16)}
   body.dark tr.eta-red:not(.sel) > td{background:rgba(192,57,43,.18)}
   body.dark tr.eta-yellow:not(.sel) > td{background:rgba(212,160,23,.16)}
+
+  /* ===== Command palette (Cmd/Ctrl-K) ===== */
+  .cmdk-back{align-items:flex-start;justify-content:center}
+  .cmdk-box{margin-top:10vh;width:560px;max-width:92vw;background:var(--sheet);border:2px solid var(--ink);
+    border-radius:8px;box-shadow:0 18px 50px rgba(0,0,0,.4);overflow:hidden;display:flex;flex-direction:column}
+  .cmdk-input{border:none;border-bottom:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);
+    font:inherit;font-size:1rem;padding:14px 16px;outline:none}
+  .cmdk-list{max-height:52vh;overflow:auto;padding:6px}
+  .cmdk-item{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;
+    border:none;background:none;color:var(--ink);padding:9px 12px;border-radius:5px;cursor:pointer;font-size:.9rem}
+  .cmdk-item.sel{background:var(--amber-wash)}
+  body.dark .cmdk-item.sel{background:#2A2310}
+  .cmdk-label{font-weight:500}
+  .cmdk-hint{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-left:12px;flex-shrink:0}
+  .cmdk-empty{padding:18px 14px;color:var(--ink-soft);font-style:italic;text-align:center}

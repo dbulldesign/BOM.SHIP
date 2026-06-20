@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.34.0";
+const APP_VERSION = "1.35.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -4671,7 +4671,7 @@ const SHORTCUTS = [
   ['Ctrl/⌘ + Z', 'Undo'],
   ['Ctrl/⌘ + Y  ·  Ctrl/⌘ + Shift + Z', 'Redo'],
   ['Ctrl/⌘ + F', 'Find in this option'],
-  ['Ctrl/⌘ + K', 'Search all options'],
+  ['Ctrl/⌘ + K', 'Command palette (actions, options, search)'],
   ['Ctrl/⌘ + Enter', 'Add a fixture row'],
   ['Enter', 'In the last row, add a new row'],
   ['Alt + N', 'New option'],
@@ -4684,6 +4684,72 @@ function openShortcuts(){
   openModal({ title:'Keyboard shortcuts', wide:false, cancelLabel:'Close',
     bodyHTML:`<table class="sc-table">${rows}</table>` });
 }
+
+/* ================= Command palette (Cmd/Ctrl-K) ================= */
+function commandList(){
+  const c = []; const add = (label,hint,run)=>c.push({label,hint,run});
+  add('New project','File',()=>newProject());
+  add('Open project…','File',()=>openClick());
+  add('Save','File',()=>saveProject());
+  add('Save as…','File',()=>saveProject(true));
+  add('Backups','File',()=>showBackups());
+  add('Export CSV','Export',()=>exportCSV());
+  add('Export Excel','Export',()=>exportEstimateXLSX());
+  add('Print / PDF','Export',()=>printEstimate());
+  add('Settings','App',()=>openSettings());
+  add('Project defaults','App',()=>openProjectDefaults());
+  add('Keyboard shortcuts','App',()=>openShortcuts());
+  add('Toggle dark / light theme','App',()=>{ const t=document.getElementById('themeToggle'); if(t) t.checked=!document.body.classList.contains('dark'); toggleTheme(); });
+  add('Go to: Estimate','View',()=>setView('estimate'));
+  add('Go to: Procurement & Shipping','View',()=>setView('shipping'));
+  add('Go to: Ship Advice','View',()=>setView('advice'));
+  add('Search items across all options…','Find',()=>openGlobalSearch());
+  add('Add option','Edit',()=>addOption());
+  (state.options||[]).forEach((o,i)=> add('Go to option: '+(o.name||('Option '+(i+1))),'Option',()=>{ setView('estimate'); selectOption(i); }));
+  return c;
+}
+let _cmdItems = [], _cmdIdx = 0;
+function openCommandPalette(){
+  closeModal();
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop cmdk-back'; back.style.display = 'flex';
+  back.innerHTML = `<div class="cmdk-box" onclick="event.stopPropagation()">
+    <input id="cmdkInput" class="cmdk-input" placeholder="Type a command or option…  (↑↓ to move, Enter to run, Esc to close)" autocomplete="off" aria-label="Command palette">
+    <div id="cmdkList" class="cmdk-list" role="listbox"></div>
+  </div>`;
+  back.addEventListener('click', e=>{ if(e.target===back) closeModal(); });
+  document.body.appendChild(back); _modalEl = back;
+  const input = back.querySelector('#cmdkInput'), listEl = back.querySelector('#cmdkList');
+  const all = commandList();
+  function setIdx(i){
+    _cmdIdx = Math.max(0, Math.min(i, _cmdItems.length-1));
+    const items = listEl.querySelectorAll('.cmdk-item');
+    items.forEach((b,j)=> b.classList.toggle('sel', j===_cmdIdx));
+    const sel = items[_cmdIdx]; if(sel && sel.scrollIntoView) sel.scrollIntoView({block:'nearest'});
+  }
+  function run(i){ const it=_cmdItems[i]; if(!it) return; closeModal(); try{ it.run(); }catch(e){} }
+  function draw(q){
+    q = String(q||'').toLowerCase().trim();
+    _cmdItems = q ? all.filter(it=> (it.label+' '+it.hint).toLowerCase().includes(q)) : all;
+    _cmdIdx = 0;
+    listEl.innerHTML = _cmdItems.length
+      ? _cmdItems.map((it,i)=>`<button class="cmdk-item ${i===0?'sel':''}" data-i="${i}" role="option"><span class="cmdk-label">${esc(it.label)}</span><span class="cmdk-hint">${esc(it.hint)}</span></button>`).join('')
+      : '<div class="cmdk-empty">No matches</div>';
+    listEl.querySelectorAll('.cmdk-item').forEach(btn=>{
+      btn.addEventListener('mousemove', ()=> setIdx(+btn.dataset.i));
+      btn.addEventListener('click', ()=> run(+btn.dataset.i));
+    });
+  }
+  draw('');
+  input.addEventListener('input', ()=> draw(input.value));
+  input.addEventListener('keydown', e=>{
+    if(e.key==='ArrowDown'){ e.preventDefault(); setIdx(_cmdIdx+1); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); setIdx(_cmdIdx-1); }
+    else if(e.key==='Enter'){ e.preventDefault(); run(_cmdIdx); }
+    else if(e.key==='Escape'){ e.preventDefault(); closeModal(); }
+  });
+  input.focus();
+}
 window.addEventListener("keydown", e=>{
   const mod = e.ctrlKey||e.metaKey;
   const t = e.target;
@@ -4695,8 +4761,8 @@ window.addEventListener("keydown", e=>{
   if(mod && (e.key.toLowerCase()==="y" || (e.key.toLowerCase()==="z" && e.shiftKey))){ e.preventDefault(); redo(); return; }
   if(mod && e.key.toLowerCase()==="s"){ e.preventDefault(); saveProject(); return; }
   if(mod && e.key.toLowerCase()==="o"){ e.preventDefault(); openClick(); return; }
-  /* Ctrl/Cmd+K → search across all options */
-  if(mod && e.key.toLowerCase()==="k"){ e.preventDefault(); openGlobalSearch(); return; }
+  /* Ctrl/Cmd+K → command palette (run actions, jump to options, search) */
+  if(mod && e.key.toLowerCase()==="k"){ e.preventDefault(); openCommandPalette(); return; }
   /* Ctrl/Cmd+F → focus the BOM find box (estimate view) */
   if(mod && e.key.toLowerCase()==="f" && view==='estimate'){
     const f=document.getElementById('bomFind'); if(f){ e.preventDefault(); f.focus(); f.select(); } return;
