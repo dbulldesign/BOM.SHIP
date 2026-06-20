@@ -980,3 +980,10 @@
   .update-banner .ub-update{background:#16181F;color:#fff;border-color:#16181F}
   .update-banner .ub-update:hover{background:#000;color:#fff}
   .update-banner .ub-later{background:transparent;border-color:transparent}
+
+  /* ===== Guided update (offline file) modal ===== */
+  .upd-steps{margin:6px 0 4px;padding-left:22px;line-height:1.6;font-size:.9rem;color:var(--ink)}
+  .upd-steps li{margin-bottom:8px}
+  .modal-body .upd-note{display:block;color:var(--ink-soft);font-size:.78rem;margin-top:6px;line-height:1.45}
+  .modal-body .upd-note a{color:var(--amber-deep);font-weight:600}
+  body.dark .modal-body .upd-note a{color:var(--amber)}
