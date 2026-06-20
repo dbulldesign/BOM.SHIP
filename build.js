@@ -43,11 +43,16 @@ function build() {
   const css = read("styles.css").trim();
   html = html.replace("/* INJECT:CSS */", () => css);
 
-  // 2) Vendor (SheetJS). Wrapped in its own <script> tag.
+  // 2) Vendor (SheetJS) — embedded but NOT executed at load. A type="text/plain"
+  //    script holds the library text so the browser does not parse/compile its
+  //    ~250 KB at startup (saving memory + launch time). The app compiles it on
+  //    demand the first time you export to Excel (see ensureSheetJS()). The
+  //    library contains no literal "</script", so embedding it as script text is
+  //    safe. Stays fully offline — the bytes are still in the file.
   const vendor = read("vendor/xlsx.mini.min.js").trim();
   html = html.replace(
     "<!-- INJECT:VENDOR -->",
-    () => "<script>\n" + vendor + "\n</script>"
+    () => '<script type="text/plain" id="sheetjs-src">\n' + vendor + "\n</script>"
   );
 
   // 3) App JS — concatenate all files in order, wrap in one <script>.
