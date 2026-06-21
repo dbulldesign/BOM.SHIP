@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.47.0";
+const APP_VERSION = "1.48.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -332,6 +332,7 @@ function blankProject(){
   const d = {...DEFAULT_DEFAULTS};
   return { name:"", jobCode:"", client:"", preparedBy:"", company:d.company, date:new Date().toLocaleDateString(),
            taxRate:d.taxRate, taxLocation:d.taxLocation, taxCheckedDate:"", options:[blankOption("Option 1")], current:0,
+           currency:appDefaultCurrency(), units:appDefaultUnits(),
            shipMeta:{}, invoices:[], shipAdvices:[], savedAddresses:[],
            memory:{mfr:[],desc:[],type:[]}, customTags:[], defaults:d };
 }
@@ -528,8 +529,79 @@ function setView(v){
 }
 
 /* ================= Helpers ================= */
-function numOr(v,d){ const n=parseFloat(String(v).replace(/[$,%\s]/g,"")); return isNaN(n)?d:n; }
-function money(n){ return "$"+ n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function numOr(v,d){ const n=parseFloat(String(v).replace(/[$€£¥₹,%\s]/g,"")); return isNaN(n)?d:n; }
+
+/* ---- Currency (display only — no conversion) ----
+   The job carries a currency code (state.currency, default USD). money() formats every
+   price in that currency. Costs are entered and stored as plain numbers; changing the
+   currency only changes how they're DISPLAYED — there is no exchange-rate math. The code
+   is saved per-job in the .json (backward compatible: absent → USD), and the last choice
+   is remembered app-level as the default for new jobs. */
+const CURRENCIES = [
+  {code:'USD', symbol:'$',   label:'US Dollar'},
+  {code:'CAD', symbol:'CA$', label:'Canadian Dollar'},
+  {code:'EUR', symbol:'€',   label:'Euro'},
+  {code:'GBP', symbol:'£',   label:'British Pound'},
+  {code:'AUD', symbol:'A$',  label:'Australian Dollar'},
+  {code:'MXN', symbol:'MX$', label:'Mexican Peso'},
+  {code:'JPY', symbol:'¥',   label:'Japanese Yen'},
+  {code:'CNY', symbol:'CN¥', label:'Chinese Yuan'},
+  {code:'CHF', symbol:'CHF', label:'Swiss Franc'},
+  {code:'INR', symbol:'₹',   label:'Indian Rupee'},
+  {code:'AED', symbol:'AED', label:'UAE Dirham'},
+  {code:'SAR', symbol:'SAR', label:'Saudi Riyal'},
+  {code:'SGD', symbol:'S$',  label:'Singapore Dollar'},
+  {code:'HKD', symbol:'HK$', label:'Hong Kong Dollar'},
+];
+const APP_CURRENCY_KEY = 'lbom_app_currency_v1';
+const APP_UNITS_KEY = 'lbom_app_units_v1';
+function appDefaultCurrency(){ try{ const c=localStorage.getItem(APP_CURRENCY_KEY); if(c && CURRENCIES.some(x=>x.code===c)) return c; }catch(e){} return 'USD'; }
+function appDefaultUnits(){ try{ const u=localStorage.getItem(APP_UNITS_KEY); if(u==='metric'||u==='imperial') return u; }catch(e){} return 'imperial'; }
+function curCode(){ return (typeof state!=='undefined' && state && CURRENCIES.some(c=>c.code===state.currency)) ? state.currency : 'USD'; }
+function curMeta(code){ return CURRENCIES.find(c=>c.code===(code||curCode())) || CURRENCIES[0]; }
+let _moneyFmt = {};
+function moneyFormatter(code){
+  if(code in _moneyFmt) return _moneyFmt[code];
+  let f = null;
+  try{ f = new Intl.NumberFormat('en-US', {style:'currency', currency:code, currencyDisplay:'narrowSymbol'}); f.format(1); }
+  catch(e){
+    try{ f = new Intl.NumberFormat('en-US', {style:'currency', currency:code}); f.format(1); }
+    catch(e2){ f = null; }
+  }
+  _moneyFmt[code] = f; return f;
+}
+function money(n){
+  n = numOr(n,0);
+  const code = curCode();
+  const f = moneyFormatter(code);
+  if(f) return f.format(n);
+  const sym = curMeta(code).symbol;   // fallback: symbol + US grouping
+  return sym + n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+/* ---- Measurement units (display label only — no conversion) ----
+   state.units is 'imperial' or 'metric'. Used to label/placeholder length fields on
+   linear & track pieces. Stored values are free-form text; switching units does not
+   convert existing numbers, it only changes the hint shown. */
+function unitsMode(){ return (typeof state!=='undefined' && state && state.units==='metric') ? 'metric' : 'imperial'; }
+function lengthUnitLabel(){ return unitsMode()==='metric' ? 'm' : 'ft'; }
+/* Populate the currency picker once (label shows symbol + code). */
+(function populateCurrencies(){
+  const sel = document.getElementById('projCurrency');
+  if(sel) sel.innerHTML = CURRENCIES.map(c=>`<option value="${c.code}">${c.symbol===c.code?c.code:c.symbol+' '+c.code} — ${c.label}</option>`).join('');
+})();
+function setCurrency(code){
+  if(!CURRENCIES.some(c=>c.code===code)) return;
+  state.currency = code;
+  try{ localStorage.setItem(APP_CURRENCY_KEY, code); }catch(e){}   // remember as default for new jobs
+  markDirty(); render();
+}
+function setUnits(mode){
+  mode = (mode==='metric') ? 'metric' : 'imperial';
+  state.units = mode;
+  try{ localStorage.setItem(APP_UNITS_KEY, mode); }catch(e){}
+  markDirty(); render();
+}
 /* format a cost value with 2 decimals for display in editable inputs (e.g. 39 -> "39.00"), no thousands comma */
 function cost2(n){ return numOr(n,0).toFixed(2); }
 /* For user-fillable number cells: render an EMPTY field (with a faded "0"/"0.00"
@@ -1291,6 +1363,8 @@ function render(){
   setIf("projTax", state.taxRate);
   setIf("projTaxLoc", state.taxLocation || "");
   setIf("projTaxDate", state.taxCheckedDate || "");
+  setIf("projCurrency", curCode());
+  setIf("projUnits", unitsMode());
   document.title = (state.name? state.name+" — ":"") + "Lighting BOM Estimator";
   renderRecents();
 
@@ -1698,7 +1772,7 @@ function servicesTable(opt){
           <span class="acc-menu" data-accmenu="${key}">
             <button class="acc-add-btn" onclick="toggleAccMenu('${key}')">+ Add ${s.unit==='Trips'?'travel':'day'} item ▾</button>
             <span class="acc-menu-list" id="accmenu_${key}" style="display:none">
-              ${presets.map((p,pi)=>`<button onclick="addServiceAddon(${gi},${si},${pi})">${esc(p.label)} ($${p.sellRate})</button>`).join('')}
+              ${presets.map((p,pi)=>`<button onclick="addServiceAddon(${gi},${si},${pi})">${esc(p.label)} (${money(p.sellRate)})</button>`).join('')}
             </span>
           </span></td></tr>`;
         addonsHTML = arows + menu;
@@ -3314,7 +3388,8 @@ function buildSchedule(){
           (r.pieces||[]).forEach(pc=>{
             lines.push({
               id:pc.id, optName:o.name, kind:'Piece', parentId:r.id,
-              type:r.type, mfr:r.mfr, desc:`${esc(r.desc)} @ ${esc(pc.length||'—')}`, part:r.part,
+              type:r.type, mfr:r.mfr, baseDesc:r.desc,
+              desc:`${esc(r.desc)} @ ${esc(pc.length||'—')}${pc.length?(' '+lengthUnitLabel()):''}`, part:r.part,
               qty:numOr(pc.qty,0), sold:0, length:pc.length,
               meta:getMeta(pc.id), isPiece:true
             });
@@ -3678,7 +3753,7 @@ function renderShipping(){
         <td style="min-width:70px"><span class="piece-pill">Pc</span></td>
         <td style="min-width:56px" class="mirror">${esc(l.type)}</td>
         <td style="min-width:120px" class="mirror">${esc(l.mfr)}</td>
-        <td style="min-width:180px" class="mirror"><span class="acc-tag-ship">${esc(l.desc)}</span></td>
+        <td style="min-width:180px"><span class="acc-tag-ship">${esc(l.baseDesc||l.desc)} @ <input class="piece-len-in" value="${esc(l.length||'')}" placeholder="length (${lengthUnitLabel()})" onchange="setPieceField('${l.parentId}','${l.id}','length',this.value)" title="Piece length (${lengthUnitLabel()})" style="width:90px">${esc(' '+lengthUnitLabel())}</span></td>
         <td style="min-width:120px" class="mirror mono">${esc(l.part)}</td>
         <td style="min-width:50px"><input class="num" value="${l.qty}" onchange="setPieceField('${l.parentId}','${l.id}','qty',this.value)" title="Quantity of pieces"></td>
         <td class="calc" style="min-width:96px"><span class="dim">incl. in LOT</span></td>
@@ -4437,7 +4512,7 @@ function exportShipXLSX(){
 
   /* --- Invoices sheet --- */
   if(state.invoices.length){
-    const iaoa = [['Invoice','Number','Date','Status','Total ($)']];
+    const iaoa = [['Invoice','Number','Date','Status','Total ('+curCode()+')']];
     state.invoices.forEach(v=> iaoa.push([v.name, v.number, v.date, v.status, invoiceTotal(v.id)]));
     const iws = XLSX.utils.aoa_to_sheet(iaoa);
     iws['!cols']=[22,14,14,10,14].map(w=>({wch:w}));
@@ -5135,6 +5210,8 @@ function applyProject(d){
     taxRate: typeof d.taxRate==="number"? d.taxRate : 0,
     taxLocation: String(d.taxLocation||""),
     taxCheckedDate: String(d.taxCheckedDate||""),
+    currency: CURRENCIES.some(c=>c.code===d.currency) ? d.currency : 'USD',
+    units: (d.units==='metric'||d.units==='imperial') ? d.units : 'imperial',
     options: d.options.map(o=>({
       name:o.name||"Option",
       fixtureMarkup: typeof o.fixtureMarkup==="number"? o.fixtureMarkup:0,

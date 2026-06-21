@@ -165,6 +165,7 @@
   .ship-table tr.piece-ship-row td{background:#EFF4F2}
   body.dark .ship-table tr.piece-ship-row td{background:#16201C}
   .piece-pill{font-size:.58rem;font-weight:700;color:#fff;background:var(--sell);padding:2px 6px;border-radius:3px}
+  .piece-len-in{font:inherit;font-size:.8rem;padding:2px 5px;border:1px solid var(--rule-dark);border-radius:3px;background:var(--sheet);color:var(--ink)}
   .svc-pill{font-size:.58rem;font-weight:700;color:#fff;background:#3A5FA0;padding:2px 6px;border-radius:3px}
   .lin-pill{font-size:.54rem;font-weight:700;color:var(--amber-deep);background:var(--amber-wash);padding:1px 4px;border-radius:3px;vertical-align:middle}
   body.dark .lin-pill{background:#2A2310}
