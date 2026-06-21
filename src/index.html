@@ -40,6 +40,13 @@
     <input id="projTaxLoc" list="usStatesList" placeholder="State / country" autocomplete="off" oninput="state.taxLocation=this.value;markDirty()"></div>
   <div class="tb-cell"><span class="tb-label">Tax verified</span>
     <input id="projTaxDate" type="date" class="num" oninput="state.taxCheckedDate=this.value;markDirty()"></div>
+  <div class="tb-cell"><span class="tb-label">Currency</span>
+    <select id="projCurrency" onchange="setCurrency(this.value)" title="Display currency for all prices (display only — no conversion)"></select></div>
+  <div class="tb-cell"><span class="tb-label">Units</span>
+    <select id="projUnits" onchange="setUnits(this.value)" title="Measurement units for length fields">
+      <option value="imperial">Imperial (ft)</option>
+      <option value="metric">Metric (m)</option>
+    </select></div>
 </div>
 
 <div class="toolbar no-print">
