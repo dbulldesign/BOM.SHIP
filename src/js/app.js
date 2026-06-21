@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.38.0";
+const APP_VERSION = "1.39.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -677,23 +677,55 @@ let _pendingTabIndex = null;   // set on Tab keydown; consumed after re-render
 let bomFilter = '';            // find/filter text for the BOM tables
 /* Optional BOM columns the user can hide; persisted locally. */
 const COLVIS_KEY = 'lbom_colvis_v1';
+/* Columns the user can hide on the fixtures/controls tables (qty, type, the
+   calc total cells stay; actions/select are always shown). */
+const HIDEABLE_COLS = [
+  ['tag','Tag'],['mfr','Manufacturer'],['part','Part No.'],['desc','Description'],
+  ['unitCost','Unit cost'],['mfrMult','Mfr ×'],['markup','Markup'],
+  ['unitSell','Unit sell'],['extCost','Ext. cost'],['extSell','Ext. sell'],
+  ['source','Price source'],['notes','Notes']
+];
+function colVisDefaults(){ const o={}; HIDEABLE_COLS.forEach(([k])=>o[k]=true); return o; }
 let colVis = loadColVis();
 function loadColVis(){
-  try{ const v=JSON.parse(localStorage.getItem(COLVIS_KEY)); return Object.assign({tag:true,markup:true,notes:true,source:true}, v||{}); }
-  catch(e){ return {tag:true,markup:true,notes:true,source:true}; }
+  try{ const v=JSON.parse(localStorage.getItem(COLVIS_KEY)); return Object.assign(colVisDefaults(), v||{}); }
+  catch(e){ return colVisDefaults(); }
 }
 function saveColVis(){ try{ localStorage.setItem(COLVIS_KEY, JSON.stringify(colVis)); }catch(e){} }
 function toggleCol(key){ colVis[key]=!colVis[key]; saveColVis(); applyColVis(); }
 function applyColVis(){
   const body=document.body;
-  body.classList.toggle('hide-col-tag', !colVis.tag);
-  body.classList.toggle('hide-col-markup', !colVis.markup);
-  body.classList.toggle('hide-col-notes', !colVis.notes);
-  body.classList.toggle('hide-col-source', !colVis.source);
+  HIDEABLE_COLS.forEach(([k])=> body.classList.toggle('hide-col-'+k, colVis[k]===false));
 }
 function toggleColMenu(){
   const m=document.getElementById('colMenu');
   if(m) m.style.display = m.style.display==='block'?'none':'block';
+}
+
+/* ---- Named column presets (app/browser-local) ---- */
+const COLPRESET_KEY = 'lbom_colpresets_v1';
+function loadColPresets(){ try{ const v=JSON.parse(localStorage.getItem(COLPRESET_KEY)); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+function saveColPresets(a){ try{ localStorage.setItem(COLPRESET_KEY, JSON.stringify(a)); }catch(e){} }
+function applyColPreset(name){
+  const p = loadColPresets().find(x=>x.name===name); if(!p) return;
+  colVis = Object.assign(colVisDefaults(), p.vis||{});
+  saveColVis(); applyColVis(); render();
+}
+function saveColPreset(name){
+  name = String(name||'').trim(); if(!name) return;
+  const arr = loadColPresets().filter(x=>x.name!==name);
+  arr.push({name, vis:{...colVis}}); saveColPresets(arr);
+  toast('Saved column preset “'+name+'”'); render();
+}
+function delColPreset(name){ saveColPresets(loadColPresets().filter(x=>x.name!==name)); render(); }
+function promptSaveColPreset(){
+  const m=document.getElementById('colMenu'); if(m) m.style.display='none';
+  openModal({ title:'Save column preset', wide:false, confirmLabel:'Save', cancelLabel:'Cancel',
+    bodyHTML:`<p class="paste-help">Save the current column show/hide layout under a name. Presets live on this computer and are shared across jobs.</p>
+      <input id="colPresetName" class="lib-search" placeholder="Preset name (e.g. Pricing, Client)" autocomplete="off">`,
+    onOpen(back){ const i=back.querySelector('#colPresetName'); if(i){ i.focus(); i.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const n=i.value.trim(); if(n){ closeModal(); saveColPreset(n); } } }); } },
+    onConfirm(back){ const i=back.querySelector('#colPresetName'); const n=i?i.value.trim():''; if(!n){ toast('Enter a name'); return; } closeModal(); saveColPreset(n); }
+  });
 }
 
 /* ================= Column widths (drag-to-resize, persisted) ================= */
@@ -1653,10 +1685,11 @@ function renderPane(){
         <div class="col-menu-wrap">
           <button class="ghost" onclick="event.stopPropagation();toggleColMenu()" title="Show / hide columns">Columns ▾</button>
           <div class="col-menu" id="colMenu" onclick="event.stopPropagation()">
-            <label><input type="checkbox" ${colVis.tag?'checked':''} onchange="toggleCol('tag')"> Tag</label>
-            <label><input type="checkbox" ${colVis.markup?'checked':''} onchange="toggleCol('markup')"> Markup</label>
-            <label><input type="checkbox" ${colVis.notes?'checked':''} onchange="toggleCol('notes')"> Notes</label>
-            <label><input type="checkbox" ${colVis.source?'checked':''} onchange="toggleCol('source')"> Price source</label>
+            ${HIDEABLE_COLS.map(([k,label])=>`<label><input type="checkbox" ${colVis[k]!==false?'checked':''} onchange="toggleCol('${k}')"> ${esc(label)}</label>`).join('')}
+            <div class="col-preset-sec">
+              ${loadColPresets().length?`<div class="col-preset-label">Presets</div>${loadColPresets().map(p=>`<div class="col-preset-row"><button class="col-preset-apply" onclick="applyColPreset('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</button><button class="col-preset-del" title="Delete preset" onclick="delColPreset('${esc(p.name).replace(/'/g,"\\'")}')">✕</button></div>`).join('')}`:''}
+              <button class="col-preset-save" onclick="promptSaveColPreset()">＋ Save current as preset…</button>
+            </div>
           </div>
         </div>
         ${approveBtn}

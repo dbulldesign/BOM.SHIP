@@ -389,11 +389,38 @@
   tr.bom-dim{opacity:.28}
   tr.bom-hit{background:var(--amber-wash)!important}
   body.dark tr.bom-hit{background:#2A2310!important}
-  /* column show/hide */
-  body.hide-col-tag .col-tag{display:none}
-  body.hide-col-markup .col-markup{display:none}
-  body.hide-col-notes .col-notes{display:none}
-  body.hide-col-source .col-source{display:none}
+  /* column show/hide — collapse the whole <col> so header + body cells hide
+     together (keeps the table aligned regardless of which th/td have classes). */
+  body.hide-col-tag col[data-col="tag"],
+  body.hide-col-mfr col[data-col="mfr"],
+  body.hide-col-part col[data-col="part"],
+  body.hide-col-desc col[data-col="desc"],
+  body.hide-col-unitCost col[data-col="unitCost"],
+  body.hide-col-mfrMult col[data-col="mfrMult"],
+  body.hide-col-markup col[data-col="markup"],
+  body.hide-col-unitSell col[data-col="unitSell"],
+  body.hide-col-extCost col[data-col="extCost"],
+  body.hide-col-extSell col[data-col="extSell"],
+  body.hide-col-source col[data-col="source"],
+  body.hide-col-notes col[data-col="notes"]{visibility:collapse}
+  /* belt-and-suspenders for the cells that already carry a column class */
+  body.hide-col-tag .col-tag,
+  body.hide-col-markup .col-markup,
+  body.hide-col-notes .col-notes,
+  body.hide-col-source .col-source,
+  body.hide-col-part .col-part,
+  body.hide-col-desc .col-desc{display:none}
+  /* column presets in the Columns menu */
+  .col-preset-sec{border-top:1px solid var(--rule);margin-top:6px;padding-top:6px;display:flex;flex-direction:column;gap:4px}
+  .col-preset-label{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+  .col-preset-row{display:flex;align-items:center;gap:4px}
+  .col-preset-apply{flex:1 1 auto;text-align:left;border:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);border-radius:3px;padding:4px 8px;font-size:.8rem;cursor:pointer}
+  .col-preset-apply:hover{background:var(--amber-wash)}
+  body.dark .col-preset-apply:hover{background:#2A2310}
+  .col-preset-del{border:none;background:none;color:var(--ink-soft);cursor:pointer;padding:0 4px}
+  .col-preset-del:hover{color:var(--danger)}
+  .col-preset-save{border:1px dashed var(--rule-dark);background:none;color:var(--ink);border-radius:3px;padding:5px 8px;font-size:.8rem;cursor:pointer;text-align:left}
+  .col-preset-save:hover{border-color:var(--amber-deep);color:var(--amber-deep)}
   .col-menu-wrap{position:relative;display:inline-block}
   .col-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;background:var(--sheet);
     border:1px solid var(--rule-dark);border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,.18);
