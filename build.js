@@ -50,9 +50,11 @@ function build() {
   //    library contains no literal "</script", so embedding it as script text is
   //    safe. Stays fully offline — the bytes are still in the file.
   const vendor = read("vendor/xlsx.mini.min.js").trim();
+  const jspdf = read("vendor/jspdf.umd.min.js").trim();   // also lazy-compiled on first PDF export
   html = html.replace(
     "<!-- INJECT:VENDOR -->",
-    () => '<script type="text/plain" id="sheetjs-src">\n' + vendor + "\n</script>"
+    () => '<script type="text/plain" id="sheetjs-src">\n' + vendor + "\n</script>\n" +
+          '<script type="text/plain" id="jspdf-src">\n' + jspdf + "\n</script>"
   );
 
   // 3) App JS — concatenate all files in order, wrap in one <script>.

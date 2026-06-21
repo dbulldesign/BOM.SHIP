@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.43.0";
+const APP_VERSION = "1.44.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3934,6 +3934,145 @@ function ensureSheetJS(){
   return (typeof XLSX!=='undefined');
 }
 
+/* Lazy-compile jsPDF (embedded as non-executed text). Returns the jsPDF
+   constructor, or null if unavailable. */
+let _jspdfReady = false;
+function ensureJsPDF(){
+  if(window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  if(!_jspdfReady){
+    const src = document.getElementById('jspdf-src');
+    if(src && src.textContent){ try{ (0,eval)(src.textContent); }catch(e){} }
+    _jspdfReady = true;
+  }
+  return (window.jspdf && window.jspdf.jsPDF) || null;
+}
+
+/* ---- Shared PDF helpers (hand-drawn tables: logo header, repeating column
+   headers per page, and a "Page X of Y" footer on every page) ---- */
+const PDF_INK = [32,36,44], PDF_MUTED = [110,116,130], PDF_SELL = [20,90,60];
+function pdfHeaderBlock(doc, M, title){
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = M, logoW = 0;
+  if(LOGO_DATA_URI && !LOGO_DATA_URI.startsWith('__')){
+    try{ doc.addImage(LOGO_DATA_URI, 'PNG', M, y, 96, 30); logoW = 110; }catch(e){}
+  }
+  doc.setTextColor.apply(doc, PDF_INK);
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text(esc2pdf(state.company||'Focus Lighting'), M+logoW, y+12);
+  doc.setFontSize(11); doc.setFont('helvetica','normal');
+  doc.text(esc2pdf((state.name||'Lighting Bill of Materials')+(title?(' — '+title):'')), M+logoW, y+27);
+  const meta = [];
+  if(state.jobCode) meta.push('Job: '+state.jobCode);
+  if(state.client) meta.push('Client: '+state.client);
+  if(state.preparedBy) meta.push('By: '+state.preparedBy);
+  if(state.date) meta.push(state.date);
+  doc.setFontSize(8.5); doc.setTextColor.apply(doc, PDF_MUTED);
+  doc.text(meta.join('    '), pageW-M, y+12, {align:'right'});
+  doc.setTextColor.apply(doc, PDF_INK);
+  return y + 42;
+}
+function esc2pdf(s){ return String(s==null?'':s); }
+function pdfPageNumbers(doc){
+  const n = doc.getNumberOfPages();
+  const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+  for(let i=1;i<=n;i++){
+    doc.setPage(i);
+    doc.setFontSize(8); doc.setTextColor.apply(doc, PDF_MUTED);
+    doc.text('Page '+i+' of '+n, pageW/2, pageH-18, {align:'center'});
+  }
+}
+/* Draw a table. cols:[{key,label,w,align}]; rows:[{kind:'data'|'section'|'sub', cells:{}, label}].
+   Returns the y after the table. Repeats the header row on each new page. */
+function pdfTable(doc, cols, rows, startY, M){
+  const pageH = doc.internal.pageSize.getHeight();
+  const bottom = pageH - M - 22;
+  const totalW = cols.reduce((a,c)=>a+c.w,0);
+  let y = startY;
+  const drawHead = ()=>{
+    doc.setFillColor.apply(doc, PDF_INK); doc.rect(M, y, totalW, 15, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+    let x = M;
+    cols.forEach(c=>{ doc.text(c.label, c.align==='right'? x+c.w-3 : x+3, y+10, {align:c.align==='right'?'right':'left'}); x += c.w; });
+    y += 15; doc.setTextColor.apply(doc, PDF_INK); doc.setFont('helvetica','normal');
+  };
+  drawHead();
+  doc.setFontSize(8);
+  rows.forEach(r=>{
+    if(r.kind==='section'){
+      const h = 14;
+      if(y+h>bottom){ doc.addPage(); y=M; drawHead(); }
+      doc.setFillColor(245,242,235); doc.rect(M, y, totalW, h, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+      doc.text(String(r.label||''), M+3, y+9.5); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      y += h; return;
+    }
+    /* measure (wrap the description column) */
+    const descCol = cols.find(c=>c.key==='desc');
+    let lines = 1, descLines = null;
+    if(descCol){ descLines = doc.splitTextToSize(String(r.cells.desc||''), descCol.w-6); lines = Math.max(1, descLines.length); }
+    const h = Math.max(13, lines*9 + 4);
+    if(y+h>bottom){ doc.addPage(); y=M; drawHead(); }
+    if(r.kind==='sub'){ doc.setFillColor(248,247,244); doc.rect(M, y, totalW, h, 'F'); doc.setFont('helvetica','bold'); }
+    let x = M;
+    cols.forEach(c=>{
+      const sell = c.key==='extSell' || c.key==='unitSell';
+      if(sell){ doc.setTextColor.apply(doc, PDF_SELL); } else { doc.setTextColor.apply(doc, PDF_INK); }
+      if(c.key==='desc' && descLines){ doc.text(descLines, x+3, y+9); }
+      else { const v = String(r.cells[c.key]==null?'':r.cells[c.key]); doc.text(v, c.align==='right'? x+c.w-3 : x+3, y+9, {align:c.align==='right'?'right':'left'}); }
+      x += c.w;
+    });
+    doc.setTextColor.apply(doc, PDF_INK);
+    doc.setDrawColor(225,223,216); doc.line(M, y+h, M+totalW, y+h);
+    if(r.kind==='sub') doc.setFont('helvetica','normal');
+    y += h;
+  });
+  return y;
+}
+function exportEstimatePDF(){
+  const jsPDF = ensureJsPDF();
+  if(!jsPDF){ toast('PDF engine could not load'); return; }
+  const M = 36;
+  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'landscape'});
+  const cols = [
+    {key:'qty', label:'QTY', w:34, align:'right'},
+    {key:'type', label:'TYPE', w:46},
+    {key:'mfr', label:'MANUFACTURER', w:96},
+    {key:'desc', label:'DESCRIPTION', w:250},
+    {key:'part', label:'PART #', w:96},
+    {key:'unitSell', label:'UNIT SELL', w:74, align:'right'},
+    {key:'extSell', label:'EXT. SELL', w:84, align:'right'}
+  ];
+  let y = pdfHeaderBlock(doc, M, 'Estimate');
+  state.options.forEach((opt, oi)=>{
+    const t = optionTotals(opt);
+    if(oi>0) y += 6;
+    if(y > doc.internal.pageSize.getHeight()-120){ doc.addPage(); y=M; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(opt.name+(opt.approved?'  (Approved)':''), M, y+4); y += 12;
+    doc.setFont('helvetica','normal');
+    const rows = [];
+    [['fixtures','Light fixtures',opt.fixtureMarkup],['controls','Lighting controls',opt.controlMarkup]].forEach(([kind,label,dm])=>{
+      rows.push({kind:'section', label});
+      (opt[kind]||[]).forEach(r=>{
+        if(r.isSection){ rows.push({kind:'section', label:'  '+(r.name||'Section')}); return; }
+        const c = rowCalc(r, dm);
+        rows.push({kind:'data', cells:{qty:r.qty, type:r.type, mfr:r.mfr||'', desc:r.desc||'', part:r.part||'', unitSell:money(c.unitSell), extSell:money(c.extSell)}});
+        (r.accessories||[]).forEach(a=>{ const ac=accCalc(a,r,dm); rows.push({kind:'data', cells:{qty:ac.qty, type:'Acc', mfr:a.mfr||'', desc:a.desc||'', part:a.part||'', unitSell:money(ac.unitSell), extSell:money(ac.extSell)}}); });
+      });
+    });
+    y = pdfTable(doc, cols, rows, y, M);
+    /* totals */
+    y += 4;
+    const lineY = (lbl,val,bold)=>{ if(y>doc.internal.pageSize.getHeight()-M-14){ doc.addPage(); y=M; } doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(9); doc.text(lbl, M+360, y+9, {align:'right'}); doc.text(val, M+ cols.reduce((a,c)=>a+c.w,0), y+9, {align:'right'}); y+=13; };
+    lineY('Subtotal', money(t.baseSub));
+    if(t.tax) lineY('Tax ('+state.taxRate+'%)', money(t.tax));
+    lineY('Total', money(t.grand), true);
+    y += 8;
+  });
+  pdfPageNumbers(doc);
+  doc.save((state.name? state.name.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_'):'lighting')+'_estimate.pdf');
+  toast('Estimate PDF saved');
+}
+
 function exportShipXLSX(){
   if(!ensureSheetJS()){ toast('Excel engine could not load'); return; }
   const rows = scheduleForExport();
@@ -5077,6 +5216,7 @@ function commandList(){
   add('Export CSV','Export',()=>exportCSV());
   add('Export Excel','Export',()=>exportEstimateXLSX());
   add('Print / PDF','Export',()=>printEstimate());
+  add('Export estimate PDF (direct)','Export',()=>exportEstimatePDF());
   add('Settings','App',()=>openSettings());
   add('Project defaults','App',()=>openProjectDefaults());
   add('Keyboard shortcuts','App',()=>openShortcuts());
