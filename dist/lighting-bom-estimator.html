@@ -1121,6 +1121,13 @@
   /* ===== Autosave timeline ===== */
   .backups-count{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
   .bi-sum{display:block;font-size:.72rem;color:var(--ink-soft);margin-top:1px}
+
+  /* ===== Conflict detection ===== */
+  .conflict-btns{flex-wrap:wrap}
+  .conflict-banner{background:#C0392B}
+  .conflict-banner .ub-update{background:#fff;color:#C0392B;border-color:#fff}
+  .conflict-banner .ub-update:hover{background:#fff;color:#922}
+  .conflict-banner .ub-later{color:#fff}
 </style>
 </head>
 <body>
@@ -1251,7 +1258,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.41.0";
+const APP_VERSION = "1.42.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -5586,6 +5593,51 @@ function savedAddressManager(){
 let fileHandle = null;
 const FILE_TYPES = [{description:"Lighting BOM project", accept:{"application/json":[".json"]}}];
 
+/* ---- Multi-user conflict detection (File System Access path only) ----
+   Record the file's lastModified+size at open and after each save; if the file
+   on disk is newer than what we recorded when we try to save (or when the window
+   regains focus), warn before overwriting. The download/upload fallback has no
+   handle, so detection simply doesn't run there. */
+let fileMeta = null;            // {lastModified, size} of the bound file as we last knew it
+let _conflictBannerShown = false;
+function recordFileMeta(file){ if(file) fileMeta = {lastModified:file.lastModified, size:file.size}; }
+function fileIsNewer(file){ return fileMeta && file && file.lastModified > fileMeta.lastModified + 1; }
+function chooseConflict(name){
+  return new Promise(resolve=>{
+    const back = document.createElement('div'); back.className='modal-backdrop'; back.style.display='flex';
+    back.innerHTML = `<div class="modal modal-wide" onclick="event.stopPropagation()">
+      <h4>This file changed on disk</h4>
+      <p>“${esc(name)}” was modified by something else (another user or program) since you opened it. How do you want to proceed? <b>Reload</b> discards your current unsaved edits.</p>
+      <div class="modal-btns conflict-btns">
+        <button class="ghost" data-k="reload">Reload disk version</button>
+        <button class="ghost" data-k="copy">Save as copy…</button>
+        <button class="danger" data-k="overwrite">Overwrite</button>
+        <button class="ghost" data-k="cancel">Cancel</button>
+      </div></div>`;
+    const done = k => { back.remove(); resolve(k); };
+    back.addEventListener('click', e=>{ if(e.target===back) done('cancel'); });
+    back.querySelectorAll('[data-k]').forEach(b=> b.addEventListener('click', ()=> done(b.dataset.k)));
+    document.body.appendChild(back);
+  });
+}
+async function checkFileConflictOnFocus(){
+  if(!fileHandle || !fileMeta || _conflictBannerShown) return;
+  try{ const cur = await fileHandle.getFile(); if(fileIsNewer(cur)){ _conflictBannerShown = true; showConflictBanner(fileHandle.name); } }catch(e){}
+}
+function showConflictBanner(name){
+  if(document.getElementById('conflictBanner')) return;
+  const b = document.createElement('div'); b.id='conflictBanner'; b.className='update-banner conflict-banner no-print';
+  b.innerHTML = `<span class="ub-msg">⚠ “${esc(name)}” changed on disk (another user or program). Your unsaved edits are still here.</span>
+    <span class="ub-actions"><button class="ub-update" onclick="reloadFromDisk()">Reload disk version</button><button class="ub-later" onclick="dismissConflictBanner()">Dismiss</button></span>`;
+  document.body.appendChild(b); document.body.classList.add('has-update-banner');
+}
+function dismissConflictBanner(){ const b=document.getElementById('conflictBanner'); if(b) b.remove(); document.body.classList.remove('has-update-banner'); _conflictBannerShown=false; }
+async function reloadFromDisk(){
+  if(!fileHandle) return;
+  try{ const cur = await fileHandle.getFile(); recordFileMeta(cur); dismissConflictBanner(); loadFromText(await cur.text(), fileHandle.name); }
+  catch(e){ toast('Could not reload from disk'); }
+}
+
 /* Save-file schema version. Bump when the shape changes. Loaders are defensive
    (normalize + default) so a NEW build opens any OLDER file and upgrades it. */
 const SAVE_VERSION = 4;
@@ -5630,10 +5682,25 @@ async function saveProject(saveAs){
            re-granted — request it within this Save click (a user gesture). */
         let p = await fileHandle.queryPermission({mode:'readwrite'});
         if(p!=='granted' && fileHandle.requestPermission) p = await fileHandle.requestPermission({mode:'readwrite'});
-        if(p!=='granted'){ fileHandle = await window.showSaveFilePicker({suggestedName:suggestedName(), types:FILE_TYPES}); }
+        if(p!=='granted'){ fileHandle = await window.showSaveFilePicker({suggestedName:suggestedName(), types:FILE_TYPES}); fileMeta = null; }
+      }
+      /* conflict check: did the file change underneath us since we opened/saved it? */
+      if(!saveAs && fileMeta){
+        try{
+          const cur = await fileHandle.getFile();
+          if(fileIsNewer(cur)){
+            const choice = await chooseConflict(fileHandle.name);
+            if(choice==='cancel') return;
+            if(choice==='reload'){ recordFileMeta(cur); dismissConflictBanner(); loadFromText(await cur.text(), fileHandle.name); return; }
+            if(choice==='copy'){ fileHandle = await window.showSaveFilePicker({suggestedName:suggestedName(), types:FILE_TYPES}); fileMeta = null; }
+            /* 'overwrite' → fall through and write */
+          }
+        }catch(e){ /* can't read the handle — just proceed with the write */ }
       }
       const w = await fileHandle.createWritable();
       await w.write(data); await w.close();
+      try{ recordFileMeta(await fileHandle.getFile()); }catch(e){}   // so our own write doesn't self-trigger
+      dismissConflictBanner();
       markSaved(); pushRecent(); render();
       toast("Saved: "+fileHandle.name);
       return;
@@ -5659,6 +5726,7 @@ async function openClick(){
       const [h] = await window.showOpenFilePicker({types:FILE_TYPES});
       fileHandle = h;
       const f = await h.getFile();
+      recordFileMeta(f); dismissConflictBanner();
       loadFromText(await f.text(), f.name);
       return;
     }catch(err){
@@ -5671,7 +5739,7 @@ async function openClick(){
 function openProject(input){
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
-  reader.onload = ()=>{ fileHandle=null; loadFromText(reader.result, file.name); };
+  reader.onload = ()=>{ fileHandle=null; fileMeta=null; dismissConflictBanner(); loadFromText(reader.result, file.name); };
   reader.readAsText(file); input.value="";
 }
 /* Validate a parsed project against the job schema before applying it, so a
@@ -6113,10 +6181,13 @@ async function newProject(){
     const ok = await showConfirm('Unsaved changes', 'Starting a new project will discard unsaved changes. Continue?', 'Discard & start new', 'danger');
     if(!ok) return;
   }
-  fileHandle = null;
+  fileHandle = null; fileMeta = null; dismissConflictBanner();
   state = blankProject(); dirty=false; resetHistory(); render();
 }
 window.addEventListener("beforeunload", e=>{ if(dirty){ e.preventDefault(); e.returnValue=""; } });
+/* Re-check for an on-disk change whenever the window regains focus. */
+window.addEventListener("focus", checkFileConflictOnFocus);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) checkFileConflictOnFocus(); });
 /* Keyboard shortcuts (kept in sync with the help popup, openShortcuts). */
 const SHORTCUTS = [
   ['Ctrl/⌘ + S', 'Save project'],
