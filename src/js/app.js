@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.49.0";
+const APP_VERSION = "1.50.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -842,9 +842,66 @@ function applyColVis(){
   const body=document.body;
   HIDEABLE_COLS.forEach(([k])=> body.classList.toggle('hide-col-'+k, colVis[k]===false));
 }
+let _colMenuOpen = false;
 function toggleColMenu(){
   const m=document.getElementById('colMenu');
-  if(m) m.style.display = m.style.display==='block'?'none':'block';
+  if(!m) return;
+  _colMenuOpen = m.style.display!=='block';
+  m.style.display = _colMenuOpen?'block':'none';
+}
+function closeColMenu(){ _colMenuOpen=false; const m=document.getElementById('colMenu'); if(m) m.style.display='none'; }
+
+/* ---- Column order (app/browser-local, shared by the fixtures & controls tables) ----
+   Stored as a permutation of the movable column keys (the select & actions columns
+   stay pinned). Applied after render by physically reordering the colgroup <col>s and
+   each aligned row's cells — so it composes cleanly with column hide, widths, sort and
+   freeze (each <col data-col> carries its own width/visibility and moves with it). */
+const COLORDER_KEY = 'lbom_colorder_v1';
+const CANON_COL_ORDER = ['qty','type','tag','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes'];
+const COL_LABELS = {qty:'Qty',type:'Type',tag:'Tag',mfr:'Manufacturer',part:'Part No.',desc:'Description',unitCost:'Unit cost',mfrMult:'Mfr ×',markup:'Markup',unitSell:'Unit sell',extCost:'Ext. cost',extSell:'Ext. sell',source:'Price source',notes:'Notes'};
+function normColOrder(){
+  let cur;
+  try{ const v=JSON.parse(localStorage.getItem(COLORDER_KEY)); cur = Array.isArray(v)? v.filter(k=>CANON_COL_ORDER.includes(k)) : null; }catch(e){ cur=null; }
+  if(!cur) cur = [];
+  cur = cur.filter((k,i)=>cur.indexOf(k)===i);                 // de-dupe
+  CANON_COL_ORDER.forEach(k=>{ if(!cur.includes(k)) cur.push(k); });   // append any missing (e.g. new columns)
+  return cur;
+}
+function saveColOrder(a){ try{ localStorage.setItem(COLORDER_KEY, JSON.stringify(a)); }catch(e){} }
+function isDefaultColOrder(){ const o=normColOrder(); return o.every((k,i)=>k===CANON_COL_ORDER[i]); }
+function moveColOrder(key, dir){
+  const o = normColOrder(); const i = o.indexOf(key), j = i+dir;
+  if(i<0 || j<0 || j>=o.length) return;
+  o[i]=o[j]; o[j]=key; saveColOrder(o); render();
+}
+function resetColOrder(){ saveColOrder(CANON_COL_ORDER.slice()); render(); }
+/* Physically reorder the BOM tables' columns to match the saved order. */
+function applyColOrder(){
+  if(isDefaultColOrder()) return;                              // nothing to do
+  const pane = document.getElementById('pane'); if(!pane) return;
+  const desired = normColOrder();
+  pane.querySelectorAll('.section table').forEach(table=>{
+    const colgroup = table.querySelector('colgroup'); if(!colgroup) return;
+    const cols = Array.from(colgroup.children);
+    const keyAt = cols.map(c=>c.getAttribute('data-col'));     // null for the select column
+    if(!keyAt.some(k=>CANON_COL_ORDER.includes(k))) return;    // not a BOM table (e.g. services) — skip
+    const n = keyAt.length;
+    const used = new Array(n).fill(false);
+    const front = [];                                          // leading non-movable cols (select)
+    let i=0; while(i<n && (keyAt[i]===null || !CANON_COL_ORDER.includes(keyAt[i]))){ front.push(i); used[i]=true; i++; }
+    const seq = front.slice();
+    desired.forEach(k=>{ const idx=keyAt.indexOf(k); if(idx>=0 && !used[idx]){ seq.push(idx); used[idx]=true; } });
+    for(let k=0;k<n;k++){ if(!used[k]){ seq.push(k); used[k]=true; } }   // trailing (actions, etc.) in place
+    if(seq.every((idx,p)=>idx===p)) return;                    // identity for this table
+    const reorder = (parent)=>{
+      const kids = Array.from(parent.children);
+      if(kids.length !== n) return;                            // colspan row — skip
+      seq.forEach(idx=> parent.appendChild(kids[idx]));
+    };
+    reorder(colgroup);
+    const thead = table.tHead; if(thead) Array.from(thead.rows).forEach(reorder);
+    const tb = table.tBodies[0]; if(tb) Array.from(tb.rows).forEach(reorder);
+  });
 }
 
 /* ---- Named column presets (app/browser-local) ---- */
@@ -864,7 +921,7 @@ function saveColPreset(name){
 }
 function delColPreset(name){ saveColPresets(loadColPresets().filter(x=>x.name!==name)); render(); }
 function promptSaveColPreset(){
-  const m=document.getElementById('colMenu'); if(m) m.style.display='none';
+  closeColMenu();
   openModal({ title:'Save column preset', wide:false, confirmLabel:'Save', cancelLabel:'Cancel',
     bodyHTML:`<p class="paste-help">Save the current column show/hide layout under a name. Presets live on this computer and are shared across jobs.</p>
       <input id="colPresetName" class="lib-search" placeholder="Preset name (e.g. Pricing, Client)" autocomplete="off">`,
@@ -1840,7 +1897,16 @@ function renderPane(){
         <div class="col-menu-wrap">
           <button class="ghost" onclick="event.stopPropagation();toggleColMenu()" title="Show / hide columns">Columns ▾</button>
           <div class="col-menu" id="colMenu" onclick="event.stopPropagation()">
+            <div class="col-menu-label">Show columns</div>
             ${HIDEABLE_COLS.map(([k,label])=>`<label><input type="checkbox" ${colVis[k]!==false?'checked':''} onchange="toggleCol('${k}')"> ${esc(label)}</label>`).join('')}
+            <div class="col-reorder-sec">
+              <div class="col-menu-label">Order <button class="col-reorder-reset" onclick="resetColOrder()" title="Reset to the default column order"${isDefaultColOrder()?' disabled':''}>Reset</button></div>
+              ${normColOrder().map((k,idx,arr)=>`<div class="col-reorder-row">
+                <span class="col-reorder-name">${esc(COL_LABELS[k]||k)}</span>
+                <button class="col-reorder-mv" onclick="moveColOrder('${k}',-1)" title="Move left / earlier"${idx===0?' disabled':''} aria-label="Move ${esc(COL_LABELS[k]||k)} earlier">▲</button>
+                <button class="col-reorder-mv" onclick="moveColOrder('${k}',1)" title="Move right / later"${idx===arr.length-1?' disabled':''} aria-label="Move ${esc(COL_LABELS[k]||k)} later">▼</button>
+              </div>`).join('')}
+            </div>
             <div class="col-preset-sec">
               ${loadColPresets().length?`<div class="col-preset-label">Presets</div>${loadColPresets().map(p=>`<div class="col-preset-row"><button class="col-preset-apply" onclick="applyColPreset('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</button><button class="col-preset-del" title="Delete preset" onclick="delColPreset('${esc(p.name).replace(/'/g,"\\'")}')">✕</button></div>`).join('')}`:''}
               <button class="col-preset-save" onclick="promptSaveColPreset()">＋ Save current as preset…</button>
@@ -1878,7 +1944,9 @@ function renderPane(){
     ${opt.approved ? changeOrdersSection(opt) : ''}`;
   bindPane();
   lockBomInputs();
+  applyColOrder();
   applyFreeze();
+  if(_colMenuOpen){ const m=document.getElementById('colMenu'); if(m) m.style.display='block'; }   // keep the Columns popover open across reorders
 }
 
 /* When an option is approved its base BOM is locked: every data field in the
@@ -5865,7 +5933,7 @@ applySettings();
 resetHistory();
 maybeRestoreAfterUpdate();   // carry work across a hosted-PWA version update
 maybeShowWelcome();          // first-run welcome (skips if a file was restored)
-document.addEventListener('click', ()=>{ const m=document.getElementById('colMenu'); if(m) m.style.display='none'; });
+document.addEventListener('click', ()=>{ closeColMenu(); });
 
 /* PWA file handler: when the installed app is launched by double-clicking a
    project file, load it — and keep the handle so Save writes back to that file.
