@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.52.0";
+const APP_VERSION = "1.52.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -590,7 +590,9 @@ function lengthUnitLabel(){ return unitsMode()==='metric' ? 'm' : 'ft'; }
 /* Populate the currency picker once (label shows symbol + code). */
 (function populateCurrencies(){
   const sel = document.getElementById('projCurrency');
-  if(sel) sel.innerHTML = CURRENCIES.map(c=>`<option value="${c.code}">${c.symbol===c.code?c.code:c.symbol+' '+c.code} — ${c.label}</option>`).join('');
+  /* Compact label (symbol + code, e.g. "$ USD") so it fits the title-block cell;
+     the full name is the option's tooltip. */
+  if(sel) sel.innerHTML = CURRENCIES.map(c=>{ const lbl = c.symbol===c.code ? c.code : c.symbol+' '+c.code; return `<option value="${c.code}" title="${esc(c.label)}">${esc(lbl)}</option>`; }).join('');
 })();
 function setCurrency(code){
   if(!CURRENCIES.some(c=>c.code===code)) return;
