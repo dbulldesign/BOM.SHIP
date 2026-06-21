@@ -1117,6 +1117,18 @@
   .pm-row input.num{text-align:right;font-family:var(--mono)}
   .pm-acts{display:inline-flex;gap:4px;justify-content:flex-end}
 
+  /* ===== Onboarding: welcome wizard + empty state ===== */
+  .wz-steps{display:flex;flex-direction:column;gap:10px;margin:10px 0 14px}
+  .wz-step{display:flex;gap:10px;align-items:flex-start}
+  .wz-num{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:var(--amber-deep);color:#fff;font-weight:700;font-size:.8rem;display:inline-flex;align-items:center;justify-content:center}
+  .wz-tips{display:flex;flex-direction:column;gap:7px;margin:10px 0;padding:10px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:.84rem}
+  .wz-tips kbd{font-family:var(--mono);font-size:.72rem;background:var(--sheet);border:1px solid var(--rule-dark);border-bottom-width:2px;border-radius:4px;padding:1px 5px}
+  .empty-state{text-align:center;margin:18px auto 22px;max-width:560px;padding:26px 22px;border:1px dashed var(--rule-dark);border-radius:10px;background:var(--paper)}
+  .empty-state .es-glow{font-size:2.4rem;line-height:1;filter:drop-shadow(0 0 10px var(--amber))}
+  .empty-state h3{margin:10px 0 4px;font-size:1.05rem;color:var(--ink)}
+  .empty-state p{margin:0 auto 14px;max-width:460px;color:var(--ink-soft);font-size:.9rem;line-height:1.5}
+  .empty-state .es-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+
   /* ===== Schema-validated import ===== */
   .import-issues{margin:6px 0 4px;padding-left:20px;font-size:.82rem;line-height:1.5;max-height:46vh;overflow:auto}
   .import-issues li{margin-bottom:5px;color:var(--ink)}

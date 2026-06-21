@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.48.0";
+const APP_VERSION = "1.49.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1854,6 +1854,7 @@ function renderPane(){
       </div>
     </div>
     ${bomSel.size ? bulkBar() : ''}
+    ${optionIsEmpty(opt) ? emptyStateHTML() : ''}
     ${sectionTable("fixtures", opt.fixtures, opt.fixtureMarkup, "Light fixtures", "")}
     ${sectionTable("controls", opt.controls, opt.controlMarkup, "Lighting controls", "ctl")}
     ${servicesTable(opt)}
@@ -5634,6 +5635,7 @@ function commandList(){
   add('Settings','App',()=>openSettings());
   add('Project defaults','App',()=>openProjectDefaults());
   add('Edit accessory & service presets','App',()=>openPresetManager());
+  add('Show welcome & tips','App',()=>openWelcome());
   add('Keyboard shortcuts','App',()=>openShortcuts());
   add('Toggle dark / light theme','App',()=>{ const t=document.getElementById('themeToggle'); if(t) t.checked=!document.body.classList.contains('dark'); toggleTheme(); });
   add('Go to: Estimate','View',()=>setView('estimate'));
@@ -5807,12 +5809,62 @@ function maybeRestoreAfterUpdate(){
   }catch(e){ return false; }
 }
 
+/* ================= Onboarding: first-run welcome + empty states ================= */
+const ONBOARD_KEY = 'lbom_onboarded_v1';
+function onboardSeen(){ try{ return localStorage.getItem(ONBOARD_KEY)==='1'; }catch(e){ return false; } }
+function markOnboarded(){ try{ localStorage.setItem(ONBOARD_KEY,'1'); }catch(e){} }
+function openWelcome(){
+  const body = `
+    <p class="paste-help">A fast, fully-offline estimator for lighting bills of materials — from pricing through procurement and ship advices. Your work saves to plain <b>.json</b> files you own and can share; nothing leaves this computer.</p>
+    <div class="wz-steps">
+      <div class="wz-step"><span class="wz-num">1</span><div><b>Estimate</b><br><span class="set-sub">Add <b>fixtures</b> &amp; <b>controls</b>, set unit costs and markups, and build priced <b>options</b> to compare. Paste rows straight from Excel, or pull saved parts from your library.</span></div></div>
+      <div class="wz-step"><span class="wz-num">2</span><div><b>Procurement &amp; Shipping</b><br><span class="set-sub">Track POs, order/receive/ship dates, shippers and tracking for every line — with status colours and filters.</span></div></div>
+      <div class="wz-step"><span class="wz-num">3</span><div><b>Ship Advice</b><br><span class="set-sub">Generate clean, printable ship advices (and direct PDFs) per shipment.</span></div></div>
+    </div>
+    <div class="wz-tips">
+      <div><b>Save early:</b> the toolbar <b>Save</b> writes back to your .json file; <b>Backups</b> are automatic browser-local snapshots.</div>
+      <div><b>Press <kbd>Ctrl/⌘ + K</kbd></b> for the command palette (actions, options, search), or <b><kbd>?</kbd></b> for all shortcuts.</div>
+      <div><b>Currency &amp; units</b> live in the title block; <b>⚙ Settings</b> tunes display, columns and presets.</div>
+    </div>
+    <p class="set-sub">You can reopen this any time from the command palette → “Show welcome &amp; tips”.</p>`;
+  openModal({ title:'Welcome to the Lighting BOM Estimator', wide:true, cancelLabel:'Start estimating',
+    onCancel(){ markOnboarded(); } });
+  markOnboarded();   // mark as soon as it's shown so it won't reappear
+}
+function maybeShowWelcome(){
+  if(onboardSeen() || fileHandle || _modalEl) return;   // not on a restored file or over another modal
+  setTimeout(()=>{ if(!_modalEl && !fileHandle) openWelcome(); }, 250);
+}
+/* Is the current option essentially empty (nothing entered yet)? Drives the empty-state card. */
+function optionIsEmpty(o){
+  if(!o) return true;
+  /* Ignore the seeded section dividers and default service rows (which carry
+     placeholder descriptions) — "empty" means nothing has actually been entered. */
+  const hasRows = arr => (arr||[]).some(r=> !r.isSection && ((r.desc||'').trim() || (r.part||'').trim() || (r.type||'').trim() || numOr(r.qty,0)>0 || (r.accessories&&r.accessories.length)));
+  const hasSvc = (o.services||[]).some(g=> (g.rows||[]).some(s=> numOr(s.qty,0)>0));
+  return !hasRows(o.fixtures) && !hasRows(o.controls) && !hasSvc;
+}
+function emptyStateHTML(){
+  return `<div class="empty-state no-print">
+    <div class="es-glow">💡</div>
+    <h3>Let’s build your lighting BOM</h3>
+    <p>Add fixtures and controls and price them here. When you’re ready, switch to <b>Procurement &amp; Shipping</b> and <b>Ship Advice</b> from the tabs up top.</p>
+    <div class="es-actions">
+      <button class="primary" onclick="addRow('fixtures')">+ Add a fixture</button>
+      <button class="ghost" onclick="openPasteModal('fixtures')" title="Paste rows from Excel or a spreadsheet">⊞ Paste from Excel</button>
+      <button class="ghost" onclick="openLibrary('fixtures')" title="Insert a saved part from your library">★ Insert from library</button>
+      <button class="ghost" onclick="openWelcome()">Quick tips</button>
+    </div>
+  </div>`;
+}
+
 render();
 updateSaveStamp();
 applyColVis();
 applySettings();
 resetHistory();
 maybeRestoreAfterUpdate();   // carry work across a hosted-PWA version update
+maybeShowWelcome();          // first-run welcome (skips if a file was restored)
 document.addEventListener('click', ()=>{ const m=document.getElementById('colMenu'); if(m) m.style.display='none'; });
 
 /* PWA file handler: when the installed app is launched by double-clicking a
