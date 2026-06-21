@@ -1117,6 +1117,10 @@
   .import-issues li{margin-bottom:5px;color:var(--ink)}
   .import-issues code{font-family:var(--mono);font-size:.78rem;background:var(--paper);padding:1px 5px;border-radius:3px;color:var(--amber-deep)}
   body.dark .import-issues code{color:var(--amber)}
+
+  /* ===== Autosave timeline ===== */
+  .backups-count{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
+  .bi-sum{display:block;font-size:.72rem;color:var(--ink-soft);margin-top:1px}
 </style>
 </head>
 <body>
@@ -1247,7 +1251,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.40.0";
+const APP_VERSION = "1.41.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1599,7 +1603,8 @@ function updateUndoButtons(){
    Keeps the most recent snapshots in localStorage so a crash or misclick can't
    lose work. These are browser-local backups, separate from your saved .json file. */
 const AUTOSAVE_KEY = "lbom_autosave_v1";
-const AUTOSAVE_MAX = 5;
+const AUTOSAVE_MAX = 30;            // keep a deeper timeline...
+const AUTOSAVE_BYTES = 1500000;     // ...but cap total bytes so we don't blow the localStorage quota
 let _autosaveTimer = null;
 function scheduleAutosave(){
   if(_autosaveTimer) clearTimeout(_autosaveTimer);
@@ -1615,9 +1620,32 @@ function doAutosave(){
     if(arr.length && arr[0].json === snap.json) return;
     arr.unshift(snap);
     arr = arr.slice(0, AUTOSAVE_MAX);
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(arr));
+    /* byte cap: drop the oldest snapshots until the buffer fits */
+    let str = JSON.stringify(arr);
+    while(arr.length > 1 && str.length > AUTOSAVE_BYTES){ arr.pop(); str = JSON.stringify(arr); }
+    localStorage.setItem(AUTOSAVE_KEY, str);
     updateSaveStamp();
   }catch(e){ /* localStorage full or unavailable — fail silently */ }
+}
+/* Lightweight per-snapshot stats for the timeline change-summary (rows + sell). */
+function snapStats(json){
+  try{
+    const d = JSON.parse(json); let rows=0, sell=0;
+    (d.options||[]).forEach(o=>{
+      ['fixtures','controls'].forEach(k=> (o[k]||[]).forEach(r=>{ if(!r.isSection){ rows++; (r.accessories||[]).forEach(()=>rows++); } }));
+      try{ sell += bomTotals(o).sub; }catch(e){}
+    });
+    return {rows, sell};
+  }catch(e){ return {rows:0, sell:0}; }
+}
+function snapSummary(curJson, prevJson){
+  const c = snapStats(curJson);
+  if(!prevJson) return c.rows+' rows · '+money(c.sell);
+  const p = snapStats(prevJson);
+  const dr = c.rows - p.rows, ds = c.sell - p.sell, parts = [];
+  if(dr) parts.push((dr>0?'+':'')+dr+' row'+(Math.abs(dr)===1?'':'s'));
+  if(Math.abs(ds) >= 0.005) parts.push((ds>0?'+':'−')+money(Math.abs(ds)));
+  return parts.length ? parts.join(' · ') : 'minor edits';
 }
 function getAutosaves(){
   try{ const a = JSON.parse(localStorage.getItem(AUTOSAVE_KEY)); return Array.isArray(a)? a : []; }
@@ -1646,9 +1674,10 @@ function showBackups(){
   if(arr.length===0){
     list.innerHTML = `<div class="backups-empty">No backups yet. They're created automatically a few seconds after you make changes.</div>`;
   } else {
-    list.innerHTML = arr.map((s,i)=>`
+    list.innerHTML = `<div class="backups-count">${arr.length} snapshot${arr.length===1?'':'s'} — newest first</div>` +
+      arr.map((s,i)=>`
       <div class="backup-item">
-        <div class="bi-info"><b>${esc(s.name)}</b><span class="bi-when">${fmtWhen(s.ts)}</span></div>
+        <div class="bi-info"><b>${esc(s.name)}</b><span class="bi-when">${fmtWhen(s.ts)}</span><span class="bi-sum">${esc(snapSummary(s.json, arr[i+1] && arr[i+1].json))}</span></div>
         <button class="ghost" onclick="restoreAutosave(${i})">Restore</button>
       </div>`).join('');
   }

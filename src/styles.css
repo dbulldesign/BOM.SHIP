@@ -1110,3 +1110,7 @@
   .import-issues li{margin-bottom:5px;color:var(--ink)}
   .import-issues code{font-family:var(--mono);font-size:.78rem;background:var(--paper);padding:1px 5px;border-radius:3px;color:var(--amber-deep)}
   body.dark .import-issues code{color:var(--amber)}
+
+  /* ===== Autosave timeline ===== */
+  .backups-count{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
+  .bi-sum{display:block;font-size:.72rem;color:var(--ink-soft);margin-top:1px}
