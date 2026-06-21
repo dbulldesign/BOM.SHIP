@@ -1145,6 +1145,16 @@
   .rev-row{display:flex;align-items:center;gap:10px;font-size:.84rem}
   .rev-when{font-family:var(--mono);font-size:.74rem;color:var(--ink-soft);white-space:nowrap}
   .rev-label{flex:1 1 auto}
+
+  /* ===== Purchase orders ===== */
+  .po-scope{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 10px}
+  .po-scope select{font:inherit;font-size:.84rem;padding:5px 7px;border:1px solid var(--rule-dark);border-radius:3px;background:var(--sheet);color:var(--ink)}
+  .po-grand{font-size:.82rem;color:var(--ink-soft)}
+  .po-list{max-height:42vh;overflow:auto;border-top:1px solid var(--rule)}
+  .po-row{display:flex;align-items:center;gap:12px;padding:7px 4px;border-bottom:1px solid var(--rule)}
+  .po-vendor{flex:1 1 auto;font-weight:600;color:var(--ink)}
+  .po-meta{font-size:.76rem;color:var(--ink-soft)}
+  .po-total{font-family:var(--mono);font-weight:700;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -1676,7 +1686,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.45.0";
+const APP_VERSION = "1.46.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -5061,6 +5071,7 @@ function renderShipping(){
       </div>
       <div class="grow"></div>
       <div class="ship-export-group">
+        <button class="ghost" onclick="openPurchaseOrders()" title="Group items by vendor and export one purchase order per manufacturer">🧾 Purchase orders</button>
         <span class="seg-label">Export schedule:</span>
         <button class="ghost" onclick="exportShipCSV()">CSV</button>
         <button class="ghost" onclick="exportShipXLSX()">Excel</button>
@@ -5829,6 +5840,104 @@ function exportAdvicePDF(){
 function exportPDF(){
   if(view==='advice') return exportAdvicePDF();
   return exportEstimatePDF();
+}
+
+/* ================= Vendor / Purchase-Order grouping (opt-in) ================= */
+/* Roll BOM items up by manufacturer (vendor). Costs are your cost (what you pay
+   the vendor), not sell. Scope: 'current' option or 'all' options. */
+function vendorGroups(scope){
+  const opts = scope==='all' ? state.options : [state.options[state.current]];
+  const map = new Map();
+  const add = (mfr,qty,type,part,desc,unit,ext,optName)=>{
+    const key = (String(mfr||'').trim()) || '(no manufacturer)';
+    if(!map.has(key)) map.set(key, {mfr:key, items:[], totalCost:0, qty:0});
+    const g = map.get(key); g.items.push({qty,type,part,desc,unit,ext,optName}); g.totalCost += ext; g.qty += numOr(qty,0);
+  };
+  opts.forEach(o=>{
+    if(!o) return;
+    [['fixtures',o.fixtureMarkup],['controls',o.controlMarkup]].forEach(([kind,dm])=>{
+      (o[kind]||[]).forEach(r=>{
+        if(r.isSection) return;
+        const c = rowCalc(r,dm), eu = numOr(r.unitCost,0)*mfrMultOf(r);
+        add(r.mfr, r.qty, r.type, r.part, r.desc, eu, c.extCost, o.name);
+        (r.accessories||[]).forEach(a=>{ const ac=accCalc(a,r,dm), aeu=numOr(a.unitCost,0)*mfrMultOf(a); add(a.mfr||r.mfr, ac.qty, 'Acc', a.part, a.desc, aeu, ac.extCost, o.name); });
+      });
+    });
+  });
+  return [...map.values()].sort((a,b)=> a.mfr.localeCompare(b.mfr));
+}
+function exportPOsPDF(scope){
+  const groups = vendorGroups(scope);
+  if(!groups.length){ toast('No items to build POs from'); return; }
+  const jsPDF = ensureJsPDF(); if(!jsPDF){ toast('PDF engine could not load'); return; }
+  const M = 40;
+  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'portrait'});
+  const pageW = doc.internal.pageSize.getWidth();
+  const cols = [
+    {key:'qty',label:'QTY',w:34,align:'right'},{key:'type',label:'TYPE',w:50},{key:'part',label:'PART NUMBER',w:120},
+    {key:'desc',label:'DESCRIPTION',w:0},{key:'unit',label:'UNIT COST',w:74,align:'right'},{key:'ext',label:'EXT. COST',w:84,align:'right'}
+  ];
+  const fixed = cols.reduce((s,c)=>s+c.w,0); cols.find(c=>c.key==='desc').w = (pageW-2*M) - fixed;
+  groups.forEach((g,gi)=>{
+    if(gi>0) doc.addPage();
+    let y = M;
+    if(LOGO_DATA_URI && !LOGO_DATA_URI.startsWith('__')){ try{ doc.addImage(LOGO_DATA_URI,'PNG',M,y,84,26); }catch(e){} }
+    doc.setFont('helvetica','bold'); doc.setTextColor.apply(doc,PDF_INK); doc.setFontSize(14);
+    doc.text('PURCHASE ORDER', pageW-M, y+12, {align:'right'});
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor.apply(doc,PDF_MUTED);
+    doc.text((state.company||'Focus Lighting'), pageW-M, y+26, {align:'right'});
+    y += 38;
+    doc.setTextColor.apply(doc,PDF_INK); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text('Vendor: '+esc2pdf(g.mfr), M, y); y += 16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor.apply(doc,PDF_MUTED);
+    const meta=[]; if(state.name) meta.push('Project: '+state.name); if(state.jobCode) meta.push('Job: '+state.jobCode); meta.push('Date: '+new Date().toLocaleDateString());
+    doc.text(meta.join('     '), M, y); y += 14; doc.setTextColor.apply(doc,PDF_INK);
+    const rows = g.items.map(it=>({kind:'data', cells:{qty:it.qty, type:it.type, part:it.part||'', desc:it.desc||'', unit:money(it.unit), ext:money(it.ext)}}));
+    y = pdfTable(doc, cols, rows, y, M);
+    y += 6; doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('PO total', M+ (pageW-2*M) - 84 - 4, y+9, {align:'right'});
+    doc.text(money(g.totalCost), M+(pageW-2*M), y+9, {align:'right'}); doc.setFont('helvetica','normal');
+  });
+  pdfPageNumbers(doc);
+  doc.save((state.name? state.name.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_'):'project')+'_purchase_orders.pdf');
+  toast(groups.length+' purchase order'+(groups.length===1?'':'s')+' exported');
+}
+function exportPOsCSV(scope){
+  const groups = vendorGroups(scope);
+  if(!groups.length){ toast('No items to build POs from'); return; }
+  const q = s => '"'+String(s==null?'':s).replace(/"/g,'""')+'"';
+  const lines = [['Vendor','Option','Qty','Type','Part #','Description','Unit cost','Ext. cost'].join(',')];
+  groups.forEach(g=> g.items.forEach(it=> lines.push([q(g.mfr),q(it.optName),it.qty,q(it.type),q(it.part),q(it.desc),numOr(it.unit,0).toFixed(2),numOr(it.ext,0).toFixed(2)].join(','))));
+  const blob = new Blob([lines.join('\r\n')], {type:'text/csv'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(state.name||'project')+'_purchase_orders.csv'; a.click(); URL.revokeObjectURL(a.href);
+  toast('Purchase orders CSV exported');
+}
+let _poScope = 'current';
+function openPurchaseOrders(){
+  const draw = ()=>{
+    const groups = vendorGroups(_poScope);
+    const grand = groups.reduce((a,g)=>a+g.totalCost,0);
+    const list = groups.length ? groups.map(g=>`<div class="po-row"><span class="po-vendor">${esc(g.mfr)}</span><span class="po-meta">${g.items.length} line${g.items.length===1?'':'s'} · ${g.qty.toLocaleString()} qty</span><span class="po-total">${money(g.totalCost)}</span></div>`).join('')
+      : '<div class="lib-empty">No items in this scope.</div>';
+    return `<p class="paste-help">Roll items up by manufacturer into purchase orders (at <b>your cost</b>). Export one PO per vendor.</p>
+      <div class="po-scope"><label>Scope <select id="poScope">
+        <option value="current" ${_poScope==='current'?'selected':''}>Current option (${esc(state.options[state.current]?.name||'')})</option>
+        <option value="all" ${_poScope==='all'?'selected':''}>All options</option>
+      </select></label><span class="po-grand">${groups.length} vendor${groups.length===1?'':'s'} · ${money(grand)}</span></div>
+      <div class="po-list">${list}</div>
+      <div class="lib-io"><button class="primary" id="poPdf">⬇ Export POs (PDF, one per vendor)</button><button class="ghost" id="poCsv">⬇ Export POs (CSV)</button></div>`;
+  };
+  openModal({ title:'Purchase orders by vendor', wide:true, cancelLabel:'Close', bodyHTML:draw(),
+    onOpen(back){
+      const body = back.querySelector('.modal-body');
+      const bind = ()=>{
+        const sc = back.querySelector('#poScope'); if(sc) sc.addEventListener('change', ()=>{ _poScope=sc.value; body.innerHTML=draw(); bind(); });
+        const pdf = back.querySelector('#poPdf'); if(pdf) pdf.addEventListener('click', ()=>exportPOsPDF(_poScope));
+        const csv = back.querySelector('#poCsv'); if(csv) csv.addEventListener('click', ()=>exportPOsCSV(_poScope));
+      };
+      bind();
+    }
+  });
 }
 
 function exportShipXLSX(){
@@ -6976,6 +7085,7 @@ function commandList(){
   add('Print / PDF','Export',()=>printEstimate());
   add('Export estimate PDF (direct)','Export',()=>exportEstimatePDF());
   add('Export ship advice PDF','Export',()=>exportAdvicePDF());
+  add('Purchase orders by vendor…','Export',()=>openPurchaseOrders());
   add('Settings','App',()=>openSettings());
   add('Project defaults','App',()=>openProjectDefaults());
   add('Keyboard shortcuts','App',()=>openShortcuts());
