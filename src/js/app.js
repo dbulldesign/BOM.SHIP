@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.50.0";
+const APP_VERSION = "1.50.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -328,6 +328,26 @@ function blankChangeOrder(num, parent){
    the same setup across projects. */
 const DEFAULT_DEFAULTS = { company:"Focus Lighting", taxRate:8.875, taxLocation:"New York",
   fixtureMarkup:50, controlMarkup:50, serviceMarkup:50, allowancePct:1, freightPct:5, controlAllowancePct:1 };
+/* Currencies + app-default keys (declared above blankProject so they're initialized
+   before module-init calls blankProject() -> appDefaultCurrency()). Display only. */
+const CURRENCIES = [
+  {code:'USD', symbol:'$',   label:'US Dollar'},
+  {code:'CAD', symbol:'CA$', label:'Canadian Dollar'},
+  {code:'EUR', symbol:'€',   label:'Euro'},
+  {code:'GBP', symbol:'£',   label:'British Pound'},
+  {code:'AUD', symbol:'A$',  label:'Australian Dollar'},
+  {code:'MXN', symbol:'MX$', label:'Mexican Peso'},
+  {code:'JPY', symbol:'¥',   label:'Japanese Yen'},
+  {code:'CNY', symbol:'CN¥', label:'Chinese Yuan'},
+  {code:'CHF', symbol:'CHF', label:'Swiss Franc'},
+  {code:'INR', symbol:'₹',   label:'Indian Rupee'},
+  {code:'AED', symbol:'AED', label:'UAE Dirham'},
+  {code:'SAR', symbol:'SAR', label:'Saudi Riyal'},
+  {code:'SGD', symbol:'S$',  label:'Singapore Dollar'},
+  {code:'HKD', symbol:'HK$', label:'Hong Kong Dollar'},
+];
+const APP_CURRENCY_KEY = 'lbom_app_currency_v1';
+const APP_UNITS_KEY = 'lbom_app_units_v1';
 function blankProject(){
   const d = {...DEFAULT_DEFAULTS};
   return { name:"", jobCode:"", client:"", preparedBy:"", company:d.company, date:new Date().toLocaleDateString(),
@@ -532,29 +552,11 @@ function setView(v){
 function numOr(v,d){ const n=parseFloat(String(v).replace(/[$€£¥₹,%\s]/g,"")); return isNaN(n)?d:n; }
 
 /* ---- Currency (display only — no conversion) ----
-   The job carries a currency code (state.currency, default USD). money() formats every
-   price in that currency. Costs are entered and stored as plain numbers; changing the
-   currency only changes how they're DISPLAYED — there is no exchange-rate math. The code
-   is saved per-job in the .json (backward compatible: absent → USD), and the last choice
-   is remembered app-level as the default for new jobs. */
-const CURRENCIES = [
-  {code:'USD', symbol:'$',   label:'US Dollar'},
-  {code:'CAD', symbol:'CA$', label:'Canadian Dollar'},
-  {code:'EUR', symbol:'€',   label:'Euro'},
-  {code:'GBP', symbol:'£',   label:'British Pound'},
-  {code:'AUD', symbol:'A$',  label:'Australian Dollar'},
-  {code:'MXN', symbol:'MX$', label:'Mexican Peso'},
-  {code:'JPY', symbol:'¥',   label:'Japanese Yen'},
-  {code:'CNY', symbol:'CN¥', label:'Chinese Yuan'},
-  {code:'CHF', symbol:'CHF', label:'Swiss Franc'},
-  {code:'INR', symbol:'₹',   label:'Indian Rupee'},
-  {code:'AED', symbol:'AED', label:'UAE Dirham'},
-  {code:'SAR', symbol:'SAR', label:'Saudi Riyal'},
-  {code:'SGD', symbol:'S$',  label:'Singapore Dollar'},
-  {code:'HKD', symbol:'HK$', label:'Hong Kong Dollar'},
-];
-const APP_CURRENCY_KEY = 'lbom_app_currency_v1';
-const APP_UNITS_KEY = 'lbom_app_units_v1';
+   CURRENCIES + the app-default keys are declared near the top of the file (above
+   blankProject) because blankProject() runs during module init to seed `state`, and
+   appDefaultCurrency() reads CURRENCIES — declaring them here would put them in the
+   temporal dead zone at that point. The display helpers below are only used at render
+   time, so they can stay here. */
 function appDefaultCurrency(){ try{ const c=localStorage.getItem(APP_CURRENCY_KEY); if(c && CURRENCIES.some(x=>x.code===c)) return c; }catch(e){} return 'USD'; }
 function appDefaultUnits(){ try{ const u=localStorage.getItem(APP_UNITS_KEY); if(u==='metric'||u==='imperial') return u; }catch(e){} return 'imperial'; }
 function curCode(){ return (typeof state!=='undefined' && state && CURRENCIES.some(c=>c.code===state.currency)) ? state.currency : 'USD'; }
@@ -1046,13 +1048,21 @@ function setFreezeCols(on){ uiSettings.freezeCols = !!on; saveSettings(); applyS
 function applyFreeze(){
   if(!uiSettings.freezeCols) return;
   const pane = document.getElementById('pane'); if(!pane) return;
+  const ID_COLS = new Set(['qty','type','tag','mfr','part','desc']);   // the left identifier block
   pane.querySelectorAll('.section table').forEach(table=>{
     const cols = table.querySelectorAll('colgroup col');
     if(!cols.length) return;
-    let descIdx = -1;
-    cols.forEach((c,idx)=>{ if(c.getAttribute('data-col')==='desc') descIdx = idx; });
-    if(descIdx < 0) return;                         // services table etc. — no desc column, skip
-    const K = descIdx + 1;
+    const keys = Array.prototype.map.call(cols, c=>c.getAttribute('data-col'));
+    if(!keys.includes('desc')) return;              // services table etc. — no desc column, skip
+    /* Pin the leading run of identifier columns (the select col has no data-col).
+       Using the contiguous run — not desc's absolute position — keeps freeze sane
+       when a custom column order moves Description rightward (it then simply isn't
+       frozen) instead of pinning nearly the whole table. */
+    let K = 0;
+    for(let idx=0; idx<keys.length; idx++){
+      if(keys[idx]===null || ID_COLS.has(keys[idx])) K = idx+1; else break;
+    }
+    if(K <= 0) return;
     const thead = table.tHead; if(!thead || !thead.rows.length) return;
     const ths = thead.rows[0].cells; if(ths.length < K) return;
     const lefts = []; let acc = 0;
@@ -1920,7 +1930,7 @@ function renderPane(){
       </div>
     </div>
     ${bomSel.size ? bulkBar() : ''}
-    ${optionIsEmpty(opt) ? emptyStateHTML() : ''}
+    ${(!opt.approved && optionIsEmpty(opt)) ? emptyStateHTML() : ''}
     ${sectionTable("fixtures", opt.fixtures, opt.fixtureMarkup, "Light fixtures", "")}
     ${sectionTable("controls", opt.controls, opt.controlMarkup, "Lighting controls", "ctl")}
     ${servicesTable(opt)}
@@ -5931,8 +5941,8 @@ updateSaveStamp();
 applyColVis();
 applySettings();
 resetHistory();
-maybeRestoreAfterUpdate();   // carry work across a hosted-PWA version update
-maybeShowWelcome();          // first-run welcome (skips if a file was restored)
+const _restored = maybeRestoreAfterUpdate();   // carry work across a hosted-PWA version update
+if(!_restored) maybeShowWelcome();             // first-run welcome (skip if work was restored; fileHandle re-binds async)
 document.addEventListener('click', ()=>{ closeColMenu(); });
 
 /* PWA file handler: when the installed app is launched by double-clicking a
