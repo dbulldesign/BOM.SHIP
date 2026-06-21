@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
 <title>Lighting BOM Estimator</title>
 <style>
 :root{
@@ -772,6 +776,62 @@
   @media (max-width:980px){
     .stamp{width:100%}
     .opt-tools{margin-left:0}
+  }
+
+  /* ===== Phones (iPhone & small screens) ===== */
+  @media (max-width:760px){
+    /* honour the notch / home-indicator safe areas */
+    body{padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right))
+      calc(28px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+    /* 16px form controls stop iOS from auto-zooming when a field is focused */
+    input,select,textarea{font-size:16px}
+    .beam{margin-bottom:14px}
+
+    .app-title{flex-wrap:wrap;gap:8px 10px;margin-bottom:10px}
+    .app-title h1{font-size:1.1rem}
+    .app-title .sub{display:none}
+    .viewswitch{margin-left:0;width:100%;order:3}
+    .vs-btn{flex:1 1 0;padding:9px 6px;font-size:.78rem;text-align:center}
+
+    /* Title block: a readable two-column grid */
+    .titleblock{grid-template-columns:1fr 1fr}
+    .tb-cell{padding:8px 10px 6px}
+    .tb-cell input,.tb-cell select{font-size:16px}
+
+    /* Toolbar becomes a single swipeable strip with bigger tap targets */
+    .toolbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none;gap:6px;padding:8px}
+    .toolbar::-webkit-scrollbar{display:none}
+    .toolbar button{flex:0 0 auto;min-height:40px;padding:8px 12px}
+    .toolbar .save-stamp{margin-left:6px}
+
+    button{min-height:38px}              /* comfortable touch targets */
+    .modal-btns button,.lib-io button{min-height:40px}
+
+    /* Panes use the full width on small screens */
+    .optionpane{padding:12px 10px 18px}
+    .opt-head{gap:8px;margin-bottom:12px}
+    .opt-head input{font-size:1.05rem}
+    .section{margin-bottom:20px}
+    .sec-add-bar{flex-wrap:wrap}
+
+    /* Tables stay swipeable horizontally with momentum scrolling */
+    .table-scroll,.adv-items-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+    .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto}
+
+    /* Modals fill the screen */
+    .modal-backdrop{align-items:flex-end}
+    .modal{min-width:0;max-width:none;width:100%;max-height:90vh;overflow:auto;
+      padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+      border-radius:14px 14px 0 0;border-width:0}
+    .modal-wide,.modal-xwide{width:100%;max-width:none}
+    .modal-btns{position:sticky;bottom:0;background:var(--sheet);padding-top:10px}
+
+    /* Bigger hit areas for the tiny row controls */
+    .rowdel,.rowact,.linkbtn,.sec-toggle,.acc-collapse-btn{min-width:34px;min-height:34px}
+    .ver-badge{padding:4px 10px}
   }
 
   /* ===== Version badge & update banner ===== */
@@ -1757,7 +1817,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.52.1";
+const APP_VERSION = "1.53.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
