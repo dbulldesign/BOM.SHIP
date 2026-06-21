@@ -1104,3 +1104,9 @@
   .stm-mini{border:1px solid var(--rule-dark);background:var(--sheet);color:var(--ink);border-radius:3px;padding:3px 7px;font-size:.78rem;cursor:pointer}
   .stm-mini[disabled]{opacity:.35;cursor:default}
   .stm-del:hover{color:var(--danger);border-color:var(--danger)}
+
+  /* ===== Schema-validated import ===== */
+  .import-issues{margin:6px 0 4px;padding-left:20px;font-size:.82rem;line-height:1.5;max-height:46vh;overflow:auto}
+  .import-issues li{margin-bottom:5px;color:var(--ink)}
+  .import-issues code{font-family:var(--mono);font-size:.78rem;background:var(--paper);padding:1px 5px;border-radius:3px;color:var(--amber-deep)}
+  body.dark .import-issues code{color:var(--amber)}

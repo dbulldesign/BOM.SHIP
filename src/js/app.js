@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.39.0";
+const APP_VERSION = "1.40.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -4409,18 +4409,63 @@ function openProject(input){
   reader.onload = ()=>{ fileHandle=null; loadFromText(reader.result, file.name); };
   reader.readAsText(file); input.value="";
 }
+/* Validate a parsed project against the job schema before applying it, so a
+   malformed file yields a specific, located message instead of a silent coerce
+   or a crash. Errors block the import; warnings let it proceed best-effort. */
+function validateProject(d){
+  const errors = [], warnings = [];
+  const isObj = x => x!==null && typeof x==='object' && !Array.isArray(x);
+  const badNum = x => (x!==null && x!==undefined && x!=='' && isNaN(numOr(x, NaN)));
+  if(!isObj(d)){ errors.push({path:'(root)', msg:'not a JSON object'}); return {errors, warnings}; }
+  if(!('options' in d)){ errors.push({path:'options', msg:'missing — this file has no options'}); return {errors, warnings}; }
+  if(!Array.isArray(d.options)){ errors.push({path:'options', msg:'must be an array'}); return {errors, warnings}; }
+  if(typeof d.version==='number' && d.version > SAVE_VERSION) warnings.push({path:'version', msg:'from a newer app version ('+d.version+' > '+SAVE_VERSION+'); some details may be simplified'});
+  if(badNum(d.taxRate)) warnings.push({path:'taxRate', msg:'not a number; will use 0'});
+  if('shipMeta' in d && d.shipMeta!=null && !isObj(d.shipMeta)) errors.push({path:'shipMeta', msg:'must be an object'});
+  d.options.forEach((o,oi)=>{
+    const p = 'options['+oi+']';
+    if(!isObj(o)){ errors.push({path:p, msg:'each option must be an object'}); return; }
+    ['fixtures','controls','services','changeOrders'].forEach(k=>{
+      if(k in o && o[k]!=null && !Array.isArray(o[k])) errors.push({path:p+'.'+k, msg:'must be an array'});
+    });
+    ['fixtures','controls'].forEach(kind=>{
+      (Array.isArray(o[kind])?o[kind]:[]).forEach((r,ri)=>{
+        const rp = p+'.'+kind+'['+ri+']';
+        if(!isObj(r)){ errors.push({path:rp, msg:'each row must be an object'}); return; }
+        if(badNum(r.qty)) warnings.push({path:rp+'.qty', msg:'quantity "'+r.qty+'" is not a number; will use 0'});
+        if(badNum(r.unitCost)) warnings.push({path:rp+'.unitCost', msg:'unit cost "'+r.unitCost+'" is not a number; will use 0'});
+      });
+    });
+  });
+  return {errors, warnings};
+}
+function importIssueList(issues){ return '<ul class="import-issues">'+issues.map(e=>`<li><code>${esc(e.path)}</code> — ${esc(e.msg)}</li>`).join('')+'</ul>'; }
+function showImportError(errors, warnings){
+  const warn = (warnings && warnings.length) ? `<p class="paste-help">There ${warnings.length===1?'is':'are'} also ${warnings.length} warning(s).</p>` : '';
+  openModal({ title:'Can’t open this file', wide:true, cancelLabel:'Close',
+    bodyHTML:`<p class="paste-help">This file doesn’t match the project format — found ${errors.length} problem(s):</p>${importIssueList(errors)}${warn}` });
+}
+function showImportWarnings(warnings, proceed){
+  openModal({ title:'Open with warnings?', wide:true, confirmLabel:'Import anyway', cancelLabel:'Cancel',
+    bodyHTML:`<p class="paste-help">The file opens, but ${warnings.length} value(s) look off and will be adjusted:</p>${importIssueList(warnings)}`,
+    onConfirm(){ closeModal(); proceed(); } });
+}
 function loadFromText(text, label){
-  try{
-    const d = JSON.parse(text);
-    applyProject(d);
+  let d;
+  try{ d = JSON.parse(text); }
+  catch(err){ showImportError([{path:'(file)', msg:'not valid JSON — '+(err && err.message ? err.message : 'parse error')}]); return; }
+  const {errors, warnings} = validateProject(d);
+  if(errors.length){ showImportError(errors, warnings); return; }
+  const proceed = ()=>{
+    try{ applyProject(d); }
+    catch(e){ showImportError([{path:'(root)', msg:(e && e.message) || 'could not read this project'}]); return; }
     dirty=false; lastSavedAt=Date.now(); pushRecent(); render(); updateSaveStamp();
-    /* Forward-compat notice: opening a file written by a newer app version. */
-    if(typeof d.version==='number' && d.version > SAVE_VERSION){
+    if(typeof d.version==='number' && d.version > SAVE_VERSION)
       toast("Opened a file from a newer version — some newer details may be simplified.");
-    } else {
-      toast("Project opened: "+(state.name||label));
-    }
-  }catch(err){ alert("Could not open this file — it doesn't look like a Lighting BOM project file."); }
+    else toast("Project opened: "+(state.name||label));
+  };
+  if(warnings.length) showImportWarnings(warnings, proceed);
+  else proceed();
 }
 function applyProject(d){
   if(!d.options || !Array.isArray(d.options)) throw new Error("not a BOM file");
