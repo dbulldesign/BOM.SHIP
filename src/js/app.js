@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.36.0";
+const APP_VERSION = "1.37.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2293,6 +2293,23 @@ function onPaneKeydown(e){
         _pendingTabIndex = nextIdx;
         el.blur();   // fires change -> render -> restores focus to _pendingTabIndex
       }
+    }
+  } else if((e.key==="ArrowDown" || e.key==="ArrowUp") && el.tagName==="INPUT" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
+    /* Move up/down the same column (spreadsheet-style). Left/Right stay as text
+       cursor; Tab still moves across columns. Skips selects/textareas. */
+    const f = el.dataset.f; if(f===undefined) return;
+    const table = el.closest && el.closest('table'); if(!table) return;
+    const col = Array.prototype.slice.call(table.querySelectorAll('input[data-f="'+f+'"]'));
+    const idx = col.indexOf(el); if(idx===-1) return;
+    const next = col[idx + (e.key==="ArrowDown"?1:-1)];
+    if(!next) return;
+    e.preventDefault();
+    if(el.value === el._focusVal){ next.focus(); try{ next.select(); }catch(_){ } }   // unchanged → no re-render
+    else {
+      /* an edit will re-render the pane; route focus to the target via _pendingTabIndex */
+      const fields = paneTabbables();
+      const ni = fields.indexOf(next);
+      if(ni!==-1){ _pendingTabIndex = ni; el.blur(); } else { next.focus(); }
     }
   }
 }
@@ -4742,6 +4759,8 @@ const SHORTCUTS = [
   ['Ctrl/⌘ + K', 'Command palette (actions, options, search)'],
   ['Ctrl/⌘ + Enter', 'Add a fixture row'],
   ['Enter', 'In the last row, add a new row'],
+  ['↑ / ↓', 'Move up / down the same column'],
+  ['Tab / Shift+Tab', 'Move to the next / previous cell'],
   ['Alt + N', 'New option'],
   ['Alt + 1 / 2 / 3', 'Estimate / Procurement / Ship advice'],
   ['?', 'Show this shortcuts list'],
