@@ -1128,6 +1128,23 @@
   .conflict-banner .ub-update{background:#fff;color:#C0392B;border-color:#fff}
   .conflict-banner .ub-update:hover{background:#fff;color:#922}
   .conflict-banner .ub-later{color:#fff}
+
+  /* ===== Revision history & diffs ===== */
+  .rev-compare{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:8px 0}
+  .rev-compare select{font:inherit;font-size:.84rem;padding:5px 7px;border:1px solid var(--rule-dark);border-radius:3px;background:var(--sheet);color:var(--ink);max-width:240px}
+  .rev-summary{font-size:.82rem;color:var(--ink-soft);margin:6px 0 8px}
+  .rev-summary .up{color:var(--danger)} .rev-summary .down{color:var(--sell)}
+  .rev-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-bottom:10px}
+  .rev-table th{text-align:left;color:var(--ink-soft);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;padding:4px 6px;border-bottom:1px solid var(--rule-dark)}
+  .rev-table td{padding:4px 6px;border-bottom:1px solid var(--rule);vertical-align:top;color:var(--ink)}
+  tr.rev-add td:first-child{color:var(--sell);font-weight:700}
+  tr.rev-rem td:first-child{color:var(--danger);font-weight:700}
+  tr.rev-chg td:first-child{color:var(--amber-deep);font-weight:700}
+  tr.rev-add td{background:rgba(46,139,87,.06)} tr.rev-rem td{background:rgba(192,57,43,.06)}
+  .rev-list{border-top:1px solid var(--rule);margin-top:8px;padding-top:8px;display:flex;flex-direction:column;gap:4px;max-height:30vh;overflow:auto}
+  .rev-row{display:flex;align-items:center;gap:10px;font-size:.84rem}
+  .rev-when{font-family:var(--mono);font-size:.74rem;color:var(--ink-soft);white-space:nowrap}
+  .rev-label{flex:1 1 auto}
 </style>
 </head>
 <body>
@@ -1258,7 +1275,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.42.0";
+const APP_VERSION = "1.43.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1506,7 +1523,7 @@ function blankServiceGroup(name, type){
 function blankOption(name){
   return { name:name, fixtureMarkup:50, controlMarkup:50, serviceMarkup:50,
            allowancePct:1, freightPct:5, controlAllowancePct:1,
-           approved:false, changeOrders:[],
+           approved:false, approvedBy:"", approvedAt:"", revisions:[], changeOrders:[],
            fixtures:[sectionRow("Section 1"), blankRow(), blankRow(), blankRow()],
            controls:[blankRow(), blankRow()],
            services:[ blankServiceGroup("Supplier Services","supplier"),
@@ -2965,6 +2982,7 @@ function renderPane(){
           </div>
         </div>
         ${approveBtn}
+        <button class="ghost" onclick="openHistory()" title="Revision history & diffs for this option">🕘 History${ensureRevs(opt).length?' ('+ensureRevs(opt).length+')':''}</button>
         <button class="ghost" onclick="dupOption()">Duplicate</button>
         <button class="danger" onclick="delOption()">Delete option</button>
       </div>
@@ -3126,7 +3144,105 @@ function findCO(coId){
   for(const o of state.options){ const co=(o.changeOrders||[]).find(c=>c.id===coId); if(co) return {opt:o, co}; }
   return null;
 }
-function approveOption(){ const o=state.options[state.current]; o.approved = true; markDirty(); render(); toast('Option approved & locked — delete still works; add scope via a Change Order'); }
+/* ================= Revision history & diffs (per option) ================= */
+const REV_MAX = 20;
+const REV_FIELDS = [['qty','Qty'],['type','Type'],['mfr','Mfr'],['desc','Description'],['part','Part #'],['tag','Tag'],['unitCost','Unit cost'],['mfrMult','Mfr ×'],['markup','Markup'],['note','Note'],['source','Source']];
+function ensureRevs(opt){ if(!Array.isArray(opt.revisions)) opt.revisions = []; return opt.revisions; }
+/* A snapshot of the option's BOM data (excludes the revisions array itself). */
+function optionSnapshot(opt){
+  const keys = ['name','fixtureMarkup','controlMarkup','serviceMarkup','allowancePct','freightPct','controlAllowancePct','allowCostOv','allowSellOv','freightCostOv','freightSellOv','ctrlAllowCostOv','ctrlAllowSellOv','fixtures','controls','services','changeOrders'];
+  const o = {}; keys.forEach(k=>{ if(opt[k]!==undefined) o[k]=opt[k]; });
+  return JSON.parse(JSON.stringify(o));
+}
+function pushRevision(opt, label, by){
+  const revs = ensureRevs(opt);
+  revs.push({ id:uid(), ts:Date.now(), by:by||state.preparedBy||'', label:label||'Revision', snap:optionSnapshot(opt) });
+  if(revs.length > REV_MAX) revs.splice(0, revs.length - REV_MAX);
+  markDirty();
+}
+function saveRevisionNow(){
+  const opt = state.options[state.current];
+  pushRevision(opt, 'Manual revision', state.preparedBy);
+  toast('Revision saved'); if(document.getElementById('revHistBody')) openHistory();
+}
+/* Flatten an option/snapshot's fixtures+controls into id-keyed rows for diffing. */
+function revRows(snap){
+  const map = new Map();
+  ['fixtures','controls'].forEach(kind=> (snap[kind]||[]).forEach(r=>{ if(r && !r.isSection && r.id) map.set(r.id, {kind, row:r}); }));
+  return map;
+}
+function diffSnaps(aSnap, bSnap){
+  const A = revRows(aSnap), B = revRows(bSnap);
+  const added=[], removed=[], changed=[];
+  B.forEach((b,id)=>{ if(!A.has(id)) added.push(b); });
+  A.forEach((a,id)=>{ if(!B.has(id)) removed.push(a); });
+  A.forEach((a,id)=>{
+    if(!B.has(id)) return; const b=B.get(id);
+    const ch=[];
+    REV_FIELDS.forEach(([f])=>{ const av=a.row[f]??'', bv=b.row[f]??''; if(String(av)!==String(bv)) ch.push({field:f, from:av, to:bv}); });
+    if(ch.length) changed.push({kind:b.kind, row:b.row, changes:ch});
+  });
+  let subA=0, subB=0; try{ subA=bomTotals(aSnap).sub; }catch(e){} try{ subB=bomTotals(bSnap).sub; }catch(e){}
+  return {added, removed, changed, subA, subB};
+}
+function restoreRevision(revId){
+  const opt = state.options[state.current];
+  const rev = ensureRevs(opt).find(r=>r.id===revId); if(!rev) return;
+  showConfirm('Restore revision', `Replace this option's bill of materials with the “${esc(rev.label)}” revision from ${fmtWhen(rev.ts)}? (A revision of the current state is saved first.)`, 'Restore', 'primary').then(ok=>{
+    if(!ok) return;
+    pushRevision(opt, 'Before restore', state.preparedBy);   // safety snapshot
+    const s = rev.snap;
+    ['name','fixtureMarkup','controlMarkup','serviceMarkup','allowancePct','freightPct','controlAllowancePct','allowCostOv','allowSellOv','freightCostOv','freightSellOv','ctrlAllowCostOv','ctrlAllowSellOv','fixtures','controls','services','changeOrders'].forEach(k=>{
+      if(s[k]!==undefined) opt[k] = JSON.parse(JSON.stringify(s[k]));
+    });
+    markDirty(); closeModal(); render(); toast('Revision restored');
+  });
+}
+function openHistory(){
+  const opt = state.options[state.current];
+  const revs = ensureRevs(opt).slice().reverse();   // newest first
+  const entries = [{id:'__current', label:'Current (working copy)', ts:null, by:'', snap:optionSnapshot(opt)}].concat(revs);
+  const optOpts = entries.map((e,i)=>`<option value="${e.id}">${e.ts?esc(fmtWhen(e.ts)):'Now'} — ${esc(e.label)}${e.by?(' · '+esc(e.by)):''}</option>`).join('');
+  const aSel = entries[1] ? entries[1].id : '__current';   // default A = latest revision
+  const body = `
+    <p class="paste-help">Revisions are captured automatically when you approve an option, plus any you save manually. Compare two points or restore one. ${opt.approvedBy?`<b>Approved by ${esc(opt.approvedBy)}${opt.approvedAt?(' on '+esc(opt.approvedAt)):''}.</b>`:''}</p>
+    <div class="rev-compare">
+      <label>Compare <select id="revA">${optOpts.replace('value="'+aSel+'"','value="'+aSel+'" selected')}</select></label>
+      <label>with <select id="revB"><option value="__current" selected>Now — Current (working copy)</option>${revs.map(e=>`<option value="${e.id}">${esc(fmtWhen(e.ts))} — ${esc(e.label)}</option>`).join('')}</select></label>
+      <button class="ghost" id="revSaveNow">+ Save revision now</button>
+    </div>
+    <div id="revDiff" class="rev-diff"></div>
+    <div class="rev-list">${revs.length?revs.map(r=>`<div class="rev-row"><span class="rev-when">${esc(fmtWhen(r.ts))}</span><span class="rev-label">${esc(r.label)}${r.by?(' · '+esc(r.by)):''}</span><button class="ghost" onclick="restoreRevision('${r.id}')">Restore</button></div>`).join(''):'<div class="dim">No saved revisions yet.</div>'}</div>`;
+  openModal({ title:'Option history', wide:true, cancelLabel:'Close', bodyHTML:`<div id="revHistBody">${body}</div>`,
+    onOpen(back){
+      const snapOf = id => id==='__current' ? optionSnapshot(opt) : (ensureRevs(opt).find(r=>r.id===id)||{}).snap;
+      const draw = ()=>{
+        const a = back.querySelector('#revA').value, b = back.querySelector('#revB').value;
+        const sa = snapOf(a), sb = snapOf(b);
+        if(!sa || !sb){ back.querySelector('#revDiff').innerHTML=''; return; }
+        const d = diffSnaps(sa, sb);
+        const rowLine = (cls,sign,x)=>`<tr class="${cls}"><td>${sign}</td><td>${esc(x.kind)}</td><td><b>${esc(x.row.type||'—')}</b> ${esc(x.row.desc||x.row.part||'')}</td><td>${x.changes?x.changes.map(c=>`${esc(revFieldLabel(c.field))}: ${esc(String(c.from))} → ${esc(String(c.to))}`).join('<br>'):''}</td></tr>`;
+        const rows = d.added.map(x=>rowLine('rev-add','＋',x)).join('') + d.removed.map(x=>rowLine('rev-rem','－',x)).join('') + d.changed.map(x=>rowLine('rev-chg','~',x)).join('');
+        const ds = d.subB - d.subA;
+        back.querySelector('#revDiff').innerHTML =
+          `<div class="rev-summary">${d.added.length} added · ${d.removed.length} removed · ${d.changed.length} changed · subtotal ${money(d.subA)} → ${money(d.subB)} <b class="${ds>=0?'up':'down'}">(${ds>=0?'+':'−'}${money(Math.abs(ds))})</b></div>` +
+          (rows? `<table class="rev-table"><thead><tr><th></th><th>Cat.</th><th>Item</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="dim">No differences between these two.</div>');
+      };
+      back.querySelector('#revA').addEventListener('change', draw);
+      back.querySelector('#revB').addEventListener('change', draw);
+      back.querySelector('#revSaveNow').addEventListener('click', saveRevisionNow);
+      draw();
+    }
+  });
+}
+function revFieldLabel(f){ const e=REV_FIELDS.find(x=>x[0]===f); return e?e[1]:f; }
+
+function approveOption(){
+  const o=state.options[state.current];
+  o.approved = true; o.approvedBy = state.preparedBy||o.approvedBy||''; o.approvedAt = new Date().toLocaleDateString();
+  pushRevision(o, 'Approved', state.preparedBy);
+  markDirty(); render(); toast('Option approved & locked — revision saved; delete still works, add scope via a Change Order');
+}
 function unapproveOption(){ state.options[state.current].approved = false; markDirty(); render(); toast('Option unapproved — editing re-enabled'); }
 /* Guard: when an approved option's base is locked, confirm before allowing a base edit.
    Returns true if the edit may proceed. */
@@ -4089,6 +4205,7 @@ function freshIds(copy){
 function dupOption(){
   const copy = freshIds(JSON.parse(JSON.stringify(state.options[state.current])));
   copy.name += " (copy)";
+  copy.revisions = []; copy.approved = false; copy.approvedBy = ""; copy.approvedAt = "";   // fresh history for the copy
   state.options.splice(state.current+1,0,copy); state.current++; markDirty(); render();
   toast("Option duplicated");
 }
@@ -5820,6 +5937,8 @@ function applyProject(d){
       freightCostOv:numOrNull(o.freightCostOv), freightSellOv:numOrNull(o.freightSellOv),
       ctrlAllowCostOv:numOrNull(o.ctrlAllowCostOv), ctrlAllowSellOv:numOrNull(o.ctrlAllowSellOv),
       approved: !!o.approved,
+      approvedBy: String(o.approvedBy||""), approvedAt: String(o.approvedAt||""),
+      revisions: Array.isArray(o.revisions)? o.revisions.slice(-20) : [],
       baseLocked: o.baseLocked!==false,
       changeOrders: Array.isArray(o.changeOrders)? o.changeOrders.map(normChangeOrder) : [],
       fixtures:(o.fixtures||[]).map(normRow),
