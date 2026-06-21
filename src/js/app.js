@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.51.0";
+const APP_VERSION = "1.52.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -945,7 +945,7 @@ const COLW_KEY = 'lbom_colw_v1';
 let colWidths = loadColWidths();
 function loadColWidths(){ try{ const v=JSON.parse(localStorage.getItem(COLW_KEY)); return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; } }
 function saveColWidths(){ try{ localStorage.setItem(COLW_KEY, JSON.stringify(colWidths)); }catch(e){} }
-const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:120,part:130,desc:200,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:130,notes:150,actions:110};
+const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:130,part:150,desc:210,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:165,notes:150,actions:110};
 const TEXT_COLS = new Set(['part','desc','source','notes']);
 function colKeyForField(field){
   if(field==='part'||field==='accpart') return 'part';
@@ -1092,9 +1092,9 @@ function openSettings(){
   const original = uiSettings.colText;                 // remembered so Cancel can revert
   const checked = m => uiSettings.colText===m ? 'checked' : '';
   const body = `
-    <p class="paste-help">How should long text in the <b>Part No.</b>, <b>Description</b>, <b>Price source</b> and <b>Notes</b> columns be shown?</p>
+    <p class="paste-help">How should long text in the <b>Part #</b>, <b>Description</b>, <b>Price source</b> and <b>Notes</b> columns be shown? Drag a column’s right edge to set its width.</p>
     <label class="set-opt"><input type="radio" name="colText" value="fit" ${checked('fit')}>
-      <span><b>Auto-fit to text</b><br><span class="set-sub">Fields grow to fit their content; empty cells stay compact.</span></span></label>
+      <span><b>Single line</b><br><span class="set-sub">Long text stays on one line and is clipped — widen the column to see more.</span></span></label>
     <label class="set-opt"><input type="radio" name="colText" value="wrap" ${checked('wrap')}>
       <span><b>Wrap text</b><br><span class="set-sub">Long text wraps onto multiple lines within the column.</span></span></label>
     <hr class="set-div">
@@ -1714,14 +1714,16 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     </div>
     <div class="sec-add-bar no-print">${addBtns}</div>
     <div class="table-scroll">
-    <table>
+    <table class="bom-table">
       <colgroup>${(selCol?'<col class="col-sel no-print" style="width:30px">':'')}${(allowAccessories
         ? ['qty','type','tag','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
         : ['qty','type','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
       ).map(key=>{
+        /* Every column gets an explicit width — the table is table-layout:fixed, so the
+           <col> widths are authoritative (that's what makes drag-to-resize actually stick). */
         const manual = colWidths[key];
-        const w = manual!=null ? manual : (TEXT_COLS.has(key) ? null : COL_DEFAULTS[key]);
-        return `<col data-col="${key}"${w!=null?` style="width:${w}px"`:''}>`;
+        const w = manual!=null ? manual : COL_DEFAULTS[key];
+        return `<col data-col="${key}" style="width:${w}px">`;
       }).join('')}</colgroup>
       <thead><tr>
         ${selCol?'<th class="col-sel no-print"><input type="checkbox" tabindex="-1" title="Select / clear all in this table" onclick="toggleSelectAll(\''+kind+'\', this.checked)"></th>':''}
@@ -1729,7 +1731,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         ${th('type','Type')}
         ${allowAccessories ? th('tag','Tag','col-tag') : ''}
         ${th('mfr','Manufacturer')}
-        ${th('part','Part No.')}
+        ${th('part','Part #')}
         ${th('desc','Description')}
         ${th('unitCost','Unit cost','r')}
         <th class="r" title="Manufacturer multiplier">Mfr ×</th>
@@ -2727,14 +2729,16 @@ function bindTableInteractions(pane){
       const idx = Array.prototype.indexOf.call(th.parentNode.children, th);
       const colEl = cg && cg.children[idx];
       if(!colEl) return;
-      const startX = e.clientX, startW = colEl.getBoundingClientRect().width;
+      /* Measure the header CELL (a real box) — a <col> element reports width 0 in
+         most browsers, which would make the drag jump. The <col> is what we resize. */
+      const startX = e.clientX, startW = th.getBoundingClientRect().width;
       const move = ev=>{ const w = Math.max(36, Math.round(startW + (ev.clientX - startX))); colEl.style.width = w+'px'; };
       const up = ()=>{
         document.removeEventListener('mousemove', move);
         document.removeEventListener('mouseup', up);
         const key = colEl.getAttribute('data-col');
-        if(key){ colWidths[key] = Math.round(colEl.getBoundingClientRect().width); saveColWidths(); }
-        render();   // re-render so a resized text column switches to its fixed width
+        if(key){ colWidths[key] = Math.round(th.getBoundingClientRect().width); saveColWidths(); }
+        render();   // persist the new width (re-emitted on the <col> next render)
       };
       document.addEventListener('mousemove', move);
       document.addEventListener('mouseup', up);

@@ -482,8 +482,16 @@
   .sec-markup input{width:64px;font-family:var(--mono);font-size:.82rem;padding:3px 6px;border:1px solid var(--rule-dark);text-align:right}
 
   table{width:100%;border-collapse:collapse;font-size:.84rem}
-  .table-scroll{overflow-x:auto}
+  /* padding-bottom reserves room so a horizontal scrollbar (overlay scrollbars on
+     macOS float over content) doesn't cover the bottom "+ Add …" row. */
+  .table-scroll{overflow-x:auto;padding-bottom:14px}
   .table-scroll table{min-width:980px}
+  /* Fixtures/controls tables: fixed layout so the <col> widths are authoritative —
+     this is what makes drag-to-resize actually stick, and keeps columns wide enough
+     to show their placeholders. Text fields fill their (resizable) column. */
+  .bom-table{table-layout:fixed;width:max-content}
+  .bom-table td .txt{field-sizing:fixed!important;width:100%!important;min-width:0!important;max-width:none!important}
+  .bom-table td input.txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* sticky headers: keep column titles visible when scrolling long BOMs */
   .section thead th{position:sticky;top:0;z-index:3}
   @media print{ .section thead th{position:static} }
