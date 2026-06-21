@@ -342,7 +342,7 @@
   .opt-head input{font:650 1.15rem var(--ui);border:none;border-bottom:1px dashed var(--rule-dark);
     background:transparent;padding:2px 4px;min-width:260px;color:var(--ink)}
   .opt-head input:focus{outline:none;border-bottom-color:var(--amber)}
-  .opt-tools{margin-left:auto;display:flex;gap:8px}
+  .opt-tools{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
   button.danger{border-color:var(--danger);color:var(--danger)}
   button.danger:hover{background:var(--danger);color:#fff}
 
@@ -798,11 +798,17 @@
     .modal-btns button,.lib-io button{min-height:40px}
 
     /* Panes use the full width on small screens */
-    .optionpane{padding:12px 10px 18px}
+    .optionpane{padding:12px 10px 18px;overflow-x:clip}
     .opt-head{gap:8px;margin-bottom:12px}
     .opt-head input{font-size:1.05rem}
+    .opt-head input[data-optname]{width:100%}
+    .opt-tools{margin-left:0;width:100%;gap:6px}
+    .opt-tools>button{flex:1 1 auto}
+    .bom-find{flex:1 1 100%}
+    .bom-find input{width:100%}
     .section{margin-bottom:20px}
     .sec-add-bar{flex-wrap:wrap}
+    .foraccess{max-width:100%}
 
     /* Tables stay swipeable horizontally with momentum scrolling */
     .table-scroll,.adv-items-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
