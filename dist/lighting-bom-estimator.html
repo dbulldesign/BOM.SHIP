@@ -1214,7 +1214,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.37.0";
+const APP_VERSION = "1.38.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2170,42 +2170,67 @@ function openProjectDefaults(){
 }
 
 /* ================= Search across all options ================= */
+let _gsHits = [];
 function searchAllOptions(q){
   q = String(q||'').trim().toLowerCase();
-  if(!q) return [];
-  const out = [];
+  _gsHits = [];
+  if(!q) return _gsHits;
+  /* option names */
+  state.options.forEach((o,oi)=>{ if(String(o.name||'').toLowerCase().includes(q)) _gsHits.push({type:'option', oi, optName:o.name}); });
+  /* fixtures & controls — match BOM text, then fall back to their ship-schedule data */
   state.options.forEach((o,oi)=>{
     ['fixtures','controls'].forEach(kind=>{
-      (o[kind]||[]).forEach((r,ri)=>{
+      (o[kind]||[]).forEach(r=>{
         if(r.isSection) return;
-        const hay = [r.type,r.mfr,r.desc,r.part,r.tag,r.note].join(' ').toLowerCase();
-        if(hay.includes(q)) out.push({oi, optName:o.name, kind, r});
+        const bomHay = [r.type,r.mfr,r.desc,r.part,r.tag,r.note].join(' ').toLowerCase();
+        if(bomHay.includes(q)){ _gsHits.push({type:'bom', oi, optName:o.name, kind, r}); return; }
+        const m = state.shipMeta[r.id] || {};
+        const metaFields = {po:'PO', tracking:'Tracking', shipper:'Shipper', comments:'Comments', userStatus:'Status'};
+        for(const k in metaFields){
+          if(m[k] && String(m[k]).toLowerCase().includes(q)){
+            _gsHits.push({type:'ship', oi, optName:o.name, kind, r, field:k, fieldLabel:metaFields[k], val:m[k]});
+            break;
+          }
+        }
       });
     });
   });
-  return out;
+  return _gsHits;
+}
+function gsRun(hi){
+  const h = _gsHits[hi]; if(!h) return; closeModal();
+  if(h.type==='option'){ setView('estimate'); selectOption(h.oi); return; }
+  if(h.type==='ship'){
+    setView('shipping'); shipFilter = h.oi; shipFilterOpen = true;
+    shipColFilters = { [h.field]: String(h.val) };
+    renderShipping(); return;
+  }
+  /* bom */ setView('estimate'); selectOption(h.oi); bomFilter = (h.r.part||h.r.desc||h.r.type||''); render();
 }
 function openGlobalSearch(){
   const results = (q)=>{
     const hits = searchAllOptions(q);
-    if(!q.trim()) return `<div class="lib-empty">Type to search every option's fixtures &amp; controls.</div>`;
+    if(!q.trim()) return `<div class="lib-empty">Search every option's fixtures &amp; controls, the options themselves, and ship-schedule data (PO, tracking, shipper, status…).</div>`;
     if(!hits.length) return `<div class="lib-empty">No matches for "${esc(q)}".</div>`;
-    return `<div class="lib-list">${hits.slice(0,300).map(h=>`<button class="gs-item" data-oi="${h.oi}" data-q="${esc(q)}">
+    return `<div class="lib-list">${hits.slice(0,300).map((h,i)=>{
+      if(h.type==='option') return `<button class="gs-item" data-hi="${i}">
+        <span class="gs-opt">${esc(h.optName)}</span><span class="lib-desc">Jump to this option</span><span class="gs-kind">Option</span></button>`;
+      const tagTxt = h.type==='ship' ? `${esc(h.fieldLabel)}: ${esc(String(h.val))}` : `${esc(h.r.desc||'')}${h.r.part?' · '+esc(h.r.part):''}`;
+      return `<button class="gs-item" data-hi="${i}">
         <span class="gs-opt">${esc(h.optName)}</span>
         <span class="lib-type">${esc(h.r.type||'—')}</span>
-        <span class="lib-desc">${esc(h.r.desc||'')}${h.r.part?' · '+esc(h.r.part):''}</span>
-        <span class="gs-kind">${h.kind==='controls'?'Control':'Fixture'}</span>
-      </button>`).join('')}</div>`;
+        <span class="lib-desc">${tagTxt}</span>
+        <span class="gs-kind">${h.type==='ship'?'Schedule':(h.kind==='controls'?'Control':'Fixture')}</span>
+      </button>`;
+    }).join('')}</div>`;
   };
-  const body = `<input class="lib-search" id="gsSearch" placeholder="Search all options — type, part, description, mfr, tag, note…" autocomplete="off">
+  const body = `<input class="lib-search" id="gsSearch" placeholder="Search options, fixtures, controls, PO, tracking, status…" autocomplete="off">
     <div id="gsWrap">${results('')}</div>`;
   openModal({
-    title:'Search all options', bodyHTML:body, wide:true, cancelLabel:'Close',
+    title:'Search this job', bodyHTML:body, wide:true, cancelLabel:'Close',
     onOpen(back){
       const wrap = back.querySelector('#gsWrap'); const search = back.querySelector('#gsSearch');
-      const bind = ()=> wrap.querySelectorAll('.gs-item').forEach(b=> b.addEventListener('click', ()=>{
-        const oi = +b.dataset.oi; closeModal(); selectOption(oi); bomFilter = b.dataset.q; render();
-      }));
+      const bind = ()=> wrap.querySelectorAll('.gs-item').forEach(b=> b.addEventListener('click', ()=> gsRun(+b.dataset.hi)));
       search.addEventListener('input', ()=>{ wrap.innerHTML = results(search.value); bind(); });
       bind(); search.focus();
     }
@@ -5993,7 +6018,7 @@ function commandList(){
   add('Go to: Estimate','View',()=>setView('estimate'));
   add('Go to: Procurement & Shipping','View',()=>setView('shipping'));
   add('Go to: Ship Advice','View',()=>setView('advice'));
-  add('Search items across all options…','Find',()=>openGlobalSearch());
+  add('Search this job (items, options, schedule)…','Find',()=>openGlobalSearch());
   add('Add option','Edit',()=>addOption());
   (state.options||[]).forEach((o,i)=> add('Go to option: '+(o.name||('Option '+(i+1))),'Option',()=>{ setView('estimate'); selectOption(i); }));
   return c;
