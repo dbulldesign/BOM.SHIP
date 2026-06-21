@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.50.1";
+const APP_VERSION = "1.50.2";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -861,15 +861,23 @@ function closeColMenu(){ _colMenuOpen=false; const m=document.getElementById('co
 const COLORDER_KEY = 'lbom_colorder_v1';
 const CANON_COL_ORDER = ['qty','type','tag','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes'];
 const COL_LABELS = {qty:'Qty',type:'Type',tag:'Tag',mfr:'Manufacturer',part:'Part No.',desc:'Description',unitCost:'Unit cost',mfrMult:'Mfr ×',markup:'Markup',unitSell:'Unit sell',extCost:'Ext. cost',extSell:'Ext. sell',source:'Price source',notes:'Notes'};
+/* normColOrder() is hit several times per render (isDefaultColOrder, the Columns
+   popover template, applyColOrder), so the parsed/sanitized order is cached and only
+   rebuilt when saveColOrder() changes it. Callers may mutate the result, so hand back
+   a copy. */
+let _colOrderCache = null;
 function normColOrder(){
-  let cur;
-  try{ const v=JSON.parse(localStorage.getItem(COLORDER_KEY)); cur = Array.isArray(v)? v.filter(k=>CANON_COL_ORDER.includes(k)) : null; }catch(e){ cur=null; }
-  if(!cur) cur = [];
-  cur = cur.filter((k,i)=>cur.indexOf(k)===i);                 // de-dupe
-  CANON_COL_ORDER.forEach(k=>{ if(!cur.includes(k)) cur.push(k); });   // append any missing (e.g. new columns)
-  return cur;
+  if(!_colOrderCache){
+    let cur;
+    try{ const v=JSON.parse(localStorage.getItem(COLORDER_KEY)); cur = Array.isArray(v)? v.filter(k=>CANON_COL_ORDER.includes(k)) : null; }catch(e){ cur=null; }
+    if(!cur) cur = [];
+    cur = cur.filter((k,i)=>cur.indexOf(k)===i);                 // de-dupe
+    CANON_COL_ORDER.forEach(k=>{ if(!cur.includes(k)) cur.push(k); });   // append any missing (e.g. new columns)
+    _colOrderCache = cur;
+  }
+  return _colOrderCache.slice();
 }
-function saveColOrder(a){ try{ localStorage.setItem(COLORDER_KEY, JSON.stringify(a)); }catch(e){} }
+function saveColOrder(a){ _colOrderCache = null; try{ localStorage.setItem(COLORDER_KEY, JSON.stringify(a)); }catch(e){} }   // invalidate; normColOrder re-sanitizes on next read
 function isDefaultColOrder(){ const o=normColOrder(); return o.every((k,i)=>k===CANON_COL_ORDER[i]); }
 function moveColOrder(key, dir){
   const o = normColOrder(); const i = o.indexOf(key), j = i+dir;
@@ -3468,7 +3476,10 @@ function buildSchedule(){
             lines.push({
               id:pc.id, optName:o.name, kind:'Piece', parentId:r.id,
               type:r.type, mfr:r.mfr, baseDesc:r.desc,
-              desc:`${esc(r.desc)} @ ${esc(pc.length||'—')}${pc.length?(' '+lengthUnitLabel()):''}`, part:r.part,
+              /* RAW like every other schedule line — HTML sites esc() it, CSV/XLSX/PDF
+                 and the column filter use it as-is. (Was pre-escaped, which double-
+                 escaped in exports and broke desc filtering for special characters.) */
+              desc:`${r.desc} @ ${pc.length||'—'}${pc.length?(' '+lengthUnitLabel()):''}`, part:r.part,
               qty:numOr(pc.qty,0), sold:0, length:pc.length,
               meta:getMeta(pc.id), isPiece:true
             });
@@ -5913,13 +5924,26 @@ function maybeShowWelcome(){
   if(onboardSeen() || fileHandle || _modalEl) return;   // not on a restored file or over another modal
   setTimeout(()=>{ if(!_modalEl && !fileHandle) openWelcome(); }, 250);
 }
+/* Descriptions a freshly-seeded option ships with (Travel / In office / On site …).
+   Computed once so the empty-state can treat them as placeholders rather than content. */
+let _seededSvcDescs = null;
+function seededServiceDescs(){
+  if(!_seededSvcDescs){
+    _seededSvcDescs = new Set();
+    blankOption('_').services.forEach(g=> (g.rows||[]).forEach(r=>{ const d=(r.desc||'').trim(); if(d) _seededSvcDescs.add(d); }));
+  }
+  return _seededSvcDescs;
+}
 /* Is the current option essentially empty (nothing entered yet)? Drives the empty-state card. */
 function optionIsEmpty(o){
   if(!o) return true;
-  /* Ignore the seeded section dividers and default service rows (which carry
-     placeholder descriptions) — "empty" means nothing has actually been entered. */
+  /* Ignore the seeded section dividers and default service rows — "empty" means nothing
+     has actually been entered. A service counts as content once it has a quantity, an
+     add-on, or a description the user changed from the seeded placeholder. */
   const hasRows = arr => (arr||[]).some(r=> !r.isSection && ((r.desc||'').trim() || (r.part||'').trim() || (r.type||'').trim() || numOr(r.qty,0)>0 || (r.accessories&&r.accessories.length)));
-  const hasSvc = (o.services||[]).some(g=> (g.rows||[]).some(s=> numOr(s.qty,0)>0));
+  const seeded = seededServiceDescs();
+  const hasSvc = (o.services||[]).some(g=> (g.rows||[]).some(s=>
+    numOr(s.qty,0)>0 || (s.addons&&s.addons.length) || ((s.desc||'').trim() && !seeded.has((s.desc||'').trim()))));
   return !hasRows(o.fixtures) && !hasRows(o.controls) && !hasSvc;
 }
 function emptyStateHTML(){
