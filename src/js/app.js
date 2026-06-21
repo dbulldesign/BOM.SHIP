@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.44.0";
+const APP_VERSION = "1.45.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -4073,6 +4073,99 @@ function exportEstimatePDF(){
   toast('Estimate PDF saved');
 }
 
+/* Direct PDF of the ship advices — one advice per page, mirroring the on-screen
+   template (logo, ship-to, shipment meta, items table with the dynamic columns,
+   shipment notes, signature). */
+function exportAdvicePDF(){
+  const jsPDF = ensureJsPDF();
+  if(!jsPDF){ toast('PDF engine could not load'); return; }
+  const advices = state.shipAdvices||[];
+  if(!advices.length){ toast('No ship advices to export'); return; }
+  const M = 40;
+  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'portrait'});
+  const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+  advices.forEach((a, ai)=>{
+    if(ai>0) doc.addPage();
+    const meta = id => (a.itemMeta && a.itemMeta[id]) || {};
+    const ids = (a.itemIds||[]).filter(id=>adviceLineData(id));
+    const showPallet = ids.some(id=> String(meta(id).pallet||'').trim());
+    const showBox    = ids.some(id=> String(meta(id).box||'').trim());
+    const perItemShip = ids.some(id=>{ const m=meta(id); return String(m.via||m.tracking||m.estShip||m.estDelivery||'').trim(); });
+    const setOf = k=>{ const s=new Set(); ids.forEach(id=>{ const v=String(meta(id)[k]||a[k]||'').trim(); if(v) s.add(v); }); return s; };
+    const vias=setOf('via'), tracks=setOf('tracking'), dels=setOf('estDelivery');
+    const headVia = vias.size>1?'See Below':(a.via||[...vias][0]||'-');
+    const headTrk = (vias.size>1||tracks.size>1)?'See Below':(a.tracking||[...tracks][0]||'-');
+    const headDel = dels.size>1?'See Below':(a.estDelivery||[...dels][0]||'-');
+
+    let y = M;
+    /* header */
+    if(LOGO_DATA_URI && !LOGO_DATA_URI.startsWith('__')){ try{ doc.addImage(LOGO_DATA_URI,'PNG',M,y,90,28); }catch(e){} }
+    doc.setFont('helvetica','bold'); doc.setTextColor.apply(doc,PDF_INK); doc.setFontSize(13);
+    doc.text(esc2pdf(state.name||'Project Name Here'), pageW/2, y+12, {align:'center'});
+    doc.setFontSize(10); doc.setTextColor.apply(doc,PDF_MUTED);
+    doc.text('SHIP ADVICE', pageW/2, y+26, {align:'center'});
+    doc.setFont('helvetica','bold'); doc.setTextColor.apply(doc,PDF_INK); doc.setFontSize(10);
+    doc.text(esc2pdf(state.jobCode||''), pageW-M, y+12, {align:'right'});
+    y += 36; doc.setDrawColor.apply(doc,PDF_INK); doc.setLineWidth(1.2); doc.line(M,y,pageW-M,y); doc.setLineWidth(1); y += 10;
+
+    /* ship-to (left) + meta grid (right) */
+    const colSplit = M + (pageW-2*M)*0.42;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor.apply(doc,PDF_INK);
+    let yy = y+4;
+    [a.attn||'Attn Line', a.business||'Business Name / Firm', a.address||'Delivery Address', a.cityStateZip||'City, State Zip'].forEach((ln,i)=>{
+      doc.setFont('helvetica', i<2?'bold':'normal'); doc.text(esc2pdf(ln), M, yy+ i*12 +6);
+    });
+    const metaRows = [['SHIPMENT NAME / #', a.shipmentName||'-', 'VIA', headVia],
+                      ['SHIPMENT DATE', a.shipmentDate||'-', 'TRACKING #', headTrk],
+                      ['EST DELIVERY DATE', headDel, '', '']];
+    const mx = colSplit, mw = (pageW-M-colSplit);
+    doc.setFontSize(7.5);
+    metaRows.forEach((r,i)=>{
+      const ry = y + i*16;
+      doc.setFillColor.apply(doc,PDF_INK); doc.rect(mx, ry, mw*0.28, 15, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.text(r[0], mx+3, ry+10);
+      doc.setDrawColor(180,180,180); doc.rect(mx+mw*0.28, ry, mw*0.22, 15);
+      doc.setTextColor.apply(doc,PDF_INK); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text(esc2pdf(r[1]), mx+mw*0.28+3, ry+10); doc.setFontSize(7.5);
+      if(r[2]){ doc.setFillColor.apply(doc,PDF_INK); doc.rect(mx+mw*0.5, ry, mw*0.26, 15, 'F'); doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.text(r[2], mx+mw*0.5+3, ry+10);
+        doc.setDrawColor(180,180,180); doc.rect(mx+mw*0.76, ry, mw*0.24, 15); doc.setTextColor.apply(doc,PDF_INK); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text(esc2pdf(r[3]), mx+mw*0.76+3, ry+10); doc.setFontSize(7.5); }
+    });
+    y = Math.max(yy + 4*12 + 6, y + 3*16) + 8;
+    doc.setTextColor.apply(doc,PDF_INK);
+
+    /* items table — dynamic columns scaled to fit the page width */
+    const cols = [{key:'qty',label:'QTY',w:30,align:'right'},{key:'type',label:'TYPE',w:42},{key:'mfr',label:'MANUF.',w:64},{key:'part',label:'PART NUMBER',w:70},{key:'desc',label:'DESCRIPTION',w:130}];
+    if(showPallet) cols.push({key:'pallet',label:'PALLET',w:40,align:'right'});
+    if(showBox) cols.push({key:'box',label:'BOX',w:34,align:'right'});
+    if(perItemShip){ cols.push({key:'via',label:'SHIPPER',w:54}); cols.push({key:'tracking',label:'TRACKING',w:64}); cols.push({key:'estDelivery',label:'EST DELIV',w:48,align:'right'}); }
+    cols.push({key:'notes',label:'SHIPPING NOTES',w:70});
+    /* scale widths to the usable page width */
+    const usable = pageW-2*M, sum = cols.reduce((s,c)=>s+c.w,0), sc = usable/sum;
+    cols.forEach(c=> c.w = c.w*sc);
+    const rows = ids.map(id=>{ const l=adviceLineData(id), m=meta(id);
+      return {kind:'data', cells:{qty:l.qty, type:l.type||'', mfr:l.mfr||'', part:l.part||'', desc:l.desc||'', pallet:m.pallet||'', box:m.box||'', via:m.via||a.via||'', tracking:m.tracking||a.tracking||'', estDelivery:m.estDelivery||a.estDelivery||'', notes:''}}; });
+    y = pdfTable(doc, cols, rows.length?rows:[{kind:'data',cells:{}}], y, M);
+
+    /* shipment notes + signature */
+    y += 10;
+    if(y > pageH-90){ /* keep on same page if possible */ }
+    doc.setFillColor.apply(doc,PDF_INK); doc.rect(M, y, pageW-2*M, 14, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.text('SHIPMENT NOTES', M+4, y+9.5);
+    y += 14; doc.setTextColor.apply(doc,PDF_INK); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    const note = doc.splitTextToSize('Discrepancies, and any externally visible damage or defects to the pallets and/or cartons must be reported within (3) business days.', pageW-2*M-8);
+    doc.text(note, M+4, y+10); y += note.length*10 + 14;
+    doc.setFontSize(10); doc.text('Received By ______________________________     Date ________________', M, y+10);
+  });
+  pdfPageNumbers(doc);
+  doc.save((state.name? state.name.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_'):'lighting')+'_ship_advice.pdf');
+  toast('Ship advice PDF saved');
+}
+
+/* Route the toolbar PDF button / command by the active view. */
+function exportPDF(){
+  if(view==='advice') return exportAdvicePDF();
+  return exportEstimatePDF();
+}
+
 function exportShipXLSX(){
   if(!ensureSheetJS()){ toast('Excel engine could not load'); return; }
   const rows = scheduleForExport();
@@ -5217,6 +5310,7 @@ function commandList(){
   add('Export Excel','Export',()=>exportEstimateXLSX());
   add('Print / PDF','Export',()=>printEstimate());
   add('Export estimate PDF (direct)','Export',()=>exportEstimatePDF());
+  add('Export ship advice PDF','Export',()=>exportAdvicePDF());
   add('Settings','App',()=>openSettings());
   add('Project defaults','App',()=>openProjectDefaults());
   add('Keyboard shortcuts','App',()=>openShortcuts());
