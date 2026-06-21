@@ -1046,10 +1046,8 @@
      Sticky grand-total row is new and only applies when the toggle is on. */
   body:not(.sticky-head) .section thead th,
   body:not(.sticky-head) .ship-table thead th{position:static}
-  body.sticky-head .stamp{position:sticky;bottom:0;z-index:3;
-    box-shadow:0 -6px 14px -8px rgba(0,0,0,.25)}
-  body.dark.sticky-head .stamp{box-shadow:0 -6px 14px -8px rgba(0,0,0,.6)}
-  @media print{ body.sticky-head .stamp{position:static;box-shadow:none} }
+  /* Totals stamp never floats — it sits inline at the bottom of the estimate. */
+  .stamp{position:static}
 
   /* Freeze first columns (toggle) — applied via JS (applyFreeze) which sets
      position:sticky + left offsets; these rules give the frozen cells an opaque
@@ -1129,17 +1127,29 @@
   .pm-row input.num{text-align:right;font-family:var(--mono)}
   .pm-acts{display:inline-flex;gap:4px;justify-content:flex-end}
 
-  /* ===== Onboarding: welcome wizard + empty state ===== */
-  .wz-steps{display:flex;flex-direction:column;gap:10px;margin:10px 0 14px}
-  .wz-step{display:flex;gap:10px;align-items:flex-start}
-  .wz-num{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:var(--amber-deep);color:#fff;font-weight:700;font-size:.8rem;display:inline-flex;align-items:center;justify-content:center}
-  .wz-tips{display:flex;flex-direction:column;gap:7px;margin:10px 0;padding:10px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:.84rem}
-  .wz-tips kbd{font-family:var(--mono);font-size:.72rem;background:var(--sheet);border:1px solid var(--rule-dark);border-bottom-width:2px;border-radius:4px;padding:1px 5px}
-  .empty-state{text-align:center;margin:18px auto 22px;max-width:560px;padding:26px 22px;border:1px dashed var(--rule-dark);border-radius:10px;background:var(--paper)}
-  .empty-state .es-glow{font-size:2.4rem;line-height:1;filter:drop-shadow(0 0 10px var(--amber))}
-  .empty-state h3{margin:10px 0 4px;font-size:1.05rem;color:var(--ink)}
-  .empty-state p{margin:0 auto 14px;max-width:460px;color:var(--ink-soft);font-size:.9rem;line-height:1.5}
-  .empty-state .es-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  /* ===== Help center (manual) + guided walkthrough ===== */
+  .help-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .help-tour-btn{white-space:nowrap}
+  .help-manual{display:grid;grid-template-columns:1fr 1fr;gap:6px 22px;max-height:58vh;overflow:auto;padding-right:4px}
+  @media (max-width:680px){ .help-manual{grid-template-columns:1fr} }
+  .help-sec{padding:6px 0;border-top:1px solid var(--rule)}
+  .help-sec h5{margin:0 0 3px;font-size:.82rem;color:var(--ink)}
+  .help-sec p{margin:0;font-size:.8rem;line-height:1.5;color:var(--ink-soft)}
+  .help-manual kbd,.help-sec kbd{font-family:var(--mono);font-size:.72rem;background:var(--sheet);border:1px solid var(--rule-dark);border-bottom-width:2px;border-radius:4px;padding:0 4px}
+
+  .tour-overlay{position:fixed;inset:0;z-index:1000}
+  .tour-ring{position:fixed;border:2px solid var(--amber-deep);border-radius:6px;
+    box-shadow:0 0 0 9999px rgba(10,12,16,.55);pointer-events:none;transition:top .15s,left .15s,width .15s,height .15s}
+  .tour-pop{position:fixed;width:330px;max-width:calc(100vw - 16px);background:var(--sheet);color:var(--ink);
+    border:1px solid var(--rule-dark);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:14px 16px;z-index:1001}
+  .tour-pop-title{font-weight:700;font-size:.95rem;margin-bottom:5px}
+  .tour-pop-text{font-size:.84rem;line-height:1.5;color:var(--ink-soft)}
+  .tour-pop-text kbd{font-family:var(--mono);font-size:.72rem;background:var(--paper);border:1px solid var(--rule-dark);border-bottom-width:2px;border-radius:4px;padding:0 4px}
+  .tour-pop-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:8px}
+  .tour-count{font-size:.72rem;color:var(--ink-soft)}
+  .tour-btns{display:inline-flex;gap:6px}
+  .tour-btns button[disabled]{opacity:.4;cursor:default}
+  @media print{ .tour-overlay{display:none} }
 
   /* ===== Schema-validated import ===== */
   .import-issues{margin:6px 0 4px;padding-left:20px;font-size:.82rem;line-height:1.5;max-height:46vh;overflow:auto}

@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.50.2";
+const APP_VERSION = "1.51.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1112,7 +1112,7 @@ function openSettings(){
       <input type="range" id="setTextScale" min="0.8" max="1.4" step="0.05" value="${numOr(uiSettings.textScale,1)}" style="width:100%" aria-label="Text size">
     </div></div>
     <label class="set-opt"><input type="checkbox" id="setStickyHead" ${uiSettings.stickyHead!==false?'checked':''}>
-      <span><b>Sticky headers &amp; totals</b><br><span class="set-sub">Keep table headers and the grand-total row visible while scrolling.</span></span></label>
+      <span><b>Sticky headers</b><br><span class="set-sub">Keep table column headers visible while scrolling long tables.</span></span></label>
     <label class="set-opt"><input type="checkbox" id="setFreezeCols" ${uiSettings.freezeCols?'checked':''}>
       <span><b>Freeze identifier columns</b><br><span class="set-sub">Pin the left columns (through <b>Description</b>) on the fixtures &amp; controls tables so they stay visible when scrolling right.</span></span></label>
     <hr class="set-div">
@@ -1938,7 +1938,6 @@ function renderPane(){
       </div>
     </div>
     ${bomSel.size ? bulkBar() : ''}
-    ${(!opt.approved && optionIsEmpty(opt)) ? emptyStateHTML() : ''}
     ${sectionTable("fixtures", opt.fixtures, opt.fixtureMarkup, "Light fixtures", "")}
     ${sectionTable("controls", opt.controls, opt.controlMarkup, "Lighting controls", "ctl")}
     ${servicesTable(opt)}
@@ -5724,7 +5723,8 @@ function commandList(){
   add('Settings','App',()=>openSettings());
   add('Project defaults','App',()=>openProjectDefaults());
   add('Edit accessory & service presets','App',()=>openPresetManager());
-  add('Show welcome & tips','App',()=>openWelcome());
+  add('Help & guide','App',()=>openHelp());
+  add('Guided walkthrough','App',()=>startTour());
   add('Keyboard shortcuts','App',()=>openShortcuts());
   add('Toggle dark / light theme','App',()=>{ const t=document.getElementById('themeToggle'); if(t) t.checked=!document.body.classList.contains('dark'); toggleTheme(); });
   add('Go to: Estimate','View',()=>setView('estimate'));
@@ -5898,66 +5898,123 @@ function maybeRestoreAfterUpdate(){
   }catch(e){ return false; }
 }
 
-/* ================= Onboarding: first-run welcome + empty states ================= */
-const ONBOARD_KEY = 'lbom_onboarded_v1';
-function onboardSeen(){ try{ return localStorage.getItem(ONBOARD_KEY)==='1'; }catch(e){ return false; } }
-function markOnboarded(){ try{ localStorage.setItem(ONBOARD_KEY,'1'); }catch(e){} }
-function openWelcome(){
+
+/* ================= Help center: feature manual + click-through walkthrough =================
+   Opens only when the user asks for it (Help button / command palette). The
+   manual is a quick reference to every feature; a button inside launches the guided tour. */
+function openHelp(){
+  const sec = (h,b)=>`<div class="help-sec"><h5>${h}</h5><p>${b}</p></div>`;
   const body = `
-    <p class="paste-help">A fast, fully-offline estimator for lighting bills of materials — from pricing through procurement and ship advices. Your work saves to plain <b>.json</b> files you own and can share; nothing leaves this computer.</p>
-    <div class="wz-steps">
-      <div class="wz-step"><span class="wz-num">1</span><div><b>Estimate</b><br><span class="set-sub">Add <b>fixtures</b> &amp; <b>controls</b>, set unit costs and markups, and build priced <b>options</b> to compare. Paste rows straight from Excel, or pull saved parts from your library.</span></div></div>
-      <div class="wz-step"><span class="wz-num">2</span><div><b>Procurement &amp; Shipping</b><br><span class="set-sub">Track POs, order/receive/ship dates, shippers and tracking for every line — with status colours and filters.</span></div></div>
-      <div class="wz-step"><span class="wz-num">3</span><div><b>Ship Advice</b><br><span class="set-sub">Generate clean, printable ship advices (and direct PDFs) per shipment.</span></div></div>
+    <div class="help-top">
+      <p class="paste-help" style="margin:0 0 0 0">A fast, fully-offline estimator for lighting bills of materials — pricing, procurement, and ship advices. Your work saves to plain <b>.json</b> files you own and can share; nothing leaves this computer.</p>
+      <button class="primary help-tour-btn" id="helpStartTour">▶ Take the guided walkthrough</button>
     </div>
-    <div class="wz-tips">
-      <div><b>Save early:</b> the toolbar <b>Save</b> writes back to your .json file; <b>Backups</b> are automatic browser-local snapshots.</div>
-      <div><b>Press <kbd>Ctrl/⌘ + K</kbd></b> for the command palette (actions, options, search), or <b><kbd>?</kbd></b> for all shortcuts.</div>
-      <div><b>Currency &amp; units</b> live in the title block; <b>⚙ Settings</b> tunes display, columns and presets.</div>
-    </div>
-    <p class="set-sub">You can reopen this any time from the command palette → “Show welcome &amp; tips”.</p>`;
-  openModal({ title:'Welcome to the Lighting BOM Estimator', wide:true, cancelLabel:'Start estimating',
-    onCancel(){ markOnboarded(); } });
-  markOnboarded();   // mark as soon as it's shown so it won't reappear
+    <div class="help-manual">
+      ${sec('The three views', 'Up top switch between <b>Estimate</b> (price the BOM), <b>Procurement &amp; Shipping</b> (POs, dates, tracking), and <b>Ship Advice</b> (printable advices). Keys: <kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd>.')}
+      ${sec('Build an estimate', 'In the Estimate view add <b>fixtures</b> and <b>controls</b>: type a quantity, type, manufacturer, part, description and unit cost — the <b>Mfr ×</b> multiplier and <b>Markup</b> compute the unit sell and extended totals. Press <kbd>Enter</kbd> in the last row to add another; <kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd> adds a fixture anywhere. Use <b>⊞ Paste rows</b> to bring rows in from Excel, or <b>★ Library</b> to insert saved parts.')}
+      ${sec('Options &amp; comparison', 'Tabs across the top are priced <b>options</b> — build several (e.g. value vs premium) and compare. <b>Duplicate</b> copies an option; the compare panel highlights differences. <b>Approve</b> locks an option’s base scope (you can still delete rows and add <b>Change Orders</b>); <b>🕘 History</b> keeps revision snapshots with diffs.')}
+      ${sec('Sections, linking &amp; accessories', 'Add <b>section</b> dividers to group rows with subtotals. <b>🔗 Link</b> fixtures to share one unit cost — the first you click becomes the <b>★ master</b>, the rest follow it. On a fixture, expand <b>accessories</b> (louvers, lenses, filters…) — the quick-add list is editable in <b>⚙ Settings → presets</b>.')}
+      ${sec('Services', 'Services groups (Supplier / Controls / Ninja-Design) are sell-only lines billed by <b>Trips</b>, <b>Days</b>, <b>Hours</b> or <b>Lump&nbsp;Sum</b>. Trip/Day lines carry add-ons (flights, hotel, meals…) whose presets are also editable in Settings.')}
+      ${sec('Columns', 'The <b>Columns ▾</b> button (Estimate view) lets you <b>show/hide</b> columns, <b>reorder</b> them with ▲▼, and save <b>presets</b>. <b>⚙ Settings</b> can also <b>freeze</b> the left identifier columns and tune density, text size and wrapping.')}
+      ${sec('Currency &amp; units', 'In the title block, <b>Currency</b> formats every price (display only — no conversion) and <b>Units</b> (Imperial/Metric) labels length fields. Both save with the job; your last choice becomes the default for new jobs.')}
+      ${sec('Procurement &amp; Shipping', 'Track each line’s <b>PO</b>, order/received/ship dates, <b>shipper</b>, <b>tracking</b>, pallet/box and status — with colour-coded ETAs, per-column filters, and multi-row <b>bulk edit</b>. Generate <b>purchase orders by vendor</b> (PDF/CSV) from the command palette.')}
+      ${sec('Ship Advice &amp; invoicing', 'Create clean, printable <b>ship advices</b> per shipment (or a direct <b>PDF</b>). Tag items to shippers and tracking numbers. <b>Invoices</b> can be generated as copy-ready email text.')}
+      ${sec('Saving, backups &amp; updates', '<b>Save</b> (<kbd>Ctrl/⌘</kbd>+<kbd>S</kbd>) writes back to your .json file; <b>Save as…</b> picks a new file. <b>Backups</b> are automatic browser-local snapshots. If the file changes on disk you’ll get a conflict prompt. Click the <b>version badge</b> any time to check for updates.')}
+      ${sec('Handy keys', 'Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> for the <b>command palette</b> (every action, option and search), or <kbd>?</kbd> for the full <a href="#" onclick="closeModal();openShortcuts();return false">keyboard shortcuts</a>.')}
+    </div>`;
+  openModal({ title:'Help & guide', wide:true, cancelLabel:'Close', bodyHTML:body,
+    onOpen(back){ const b=back.querySelector('#helpStartTour'); if(b) b.addEventListener('click', ()=>{ closeModal(); startTour(); }); } });
 }
-function maybeShowWelcome(){
-  if(onboardSeen() || fileHandle || _modalEl) return;   // not on a restored file or over another modal
-  setTimeout(()=>{ if(!_modalEl && !fileHandle) openWelcome(); }, 250);
+
+/* ---- Click-through walkthrough (guided tour) ---- */
+const TOUR_STEPS = [
+  {sel:null, title:'Welcome 👋', text:'A quick tour of the essentials. Use <b>Next</b> / <b>Back</b> (or <kbd>→</kbd>/<kbd>←</kbd>), and press <kbd>Esc</kbd> to exit any time.'},
+  {sel:'#viewSwitch', title:'The three views', text:'Switch between <b>Estimate</b>, <b>Procurement &amp; Shipping</b>, and <b>Ship Advice</b>. (<kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd>.)'},
+  {sel:'.titleblock', title:'Project details', text:'Company, client, prepared-by and tax — plus this job’s <b>Currency</b> and <b>Units</b>.'},
+  {sel:'#tabs', title:'Options', text:'Each tab is a priced <b>option</b>. Build several to compare, then <b>Approve</b> one to lock its base scope.'},
+  {sel:'.sec-add-bar', title:'Add fixtures &amp; controls', text:'Add rows, <b>paste</b> from Excel, or insert from your <b>Library</b>. Set unit cost &amp; markup — sells calculate automatically.'},
+  {sel:'.col-menu-wrap', title:'Columns', text:'Show/hide, <b>reorder</b> (▲▼) and freeze columns, and save column <b>presets</b>.'},
+  {sel:'.toolbar .primary', title:'Save your work', text:'<b>Save</b> writes back to your .json file (<kbd>Ctrl/⌘</kbd>+<kbd>S</kbd>). <b>Backups</b> are automatic local snapshots.'},
+  {sel:'#verBadge', title:'Updates', text:'Click the version badge any time to check for a newer version.'},
+  {sel:null, title:'You’re set 🎉', text:'Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> for the command palette, or reopen <b>Help</b> whenever you need it. Happy estimating!'}
+];
+let _tourIdx = 0, _tourEl = null, _tourKeyH = null, _tourReposition = null;
+function startTour(){
+  setView('estimate');                       // most steps live in the estimate view
+  endTour();
+  const ov = document.createElement('div');
+  ov.className = 'tour-overlay';
+  ov.innerHTML = `<div class="tour-ring" id="tourRing"></div>
+    <div class="tour-pop" id="tourPop" role="dialog" aria-modal="false" aria-label="Guided walkthrough">
+      <div class="tour-pop-title" id="tourTitle"></div>
+      <div class="tour-pop-text" id="tourText"></div>
+      <div class="tour-pop-foot">
+        <span class="tour-count" id="tourCount"></span>
+        <span class="tour-btns">
+          <button class="ghost" id="tourSkip">Skip</button>
+          <button class="ghost" id="tourBack">Back</button>
+          <button class="primary" id="tourNext">Next</button>
+        </span>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  _tourEl = ov;
+  ov.querySelector('#tourSkip').onclick = endTour;
+  ov.querySelector('#tourBack').onclick = ()=> showTourStep(_tourIdx-1);
+  ov.querySelector('#tourNext').onclick = ()=>{ if(_tourIdx>=TOUR_STEPS.length-1) endTour(); else showTourStep(_tourIdx+1); };
+  _tourKeyH = (e)=>{
+    if(e.key==='Escape'){ e.preventDefault(); endTour(); }
+    else if(e.key==='ArrowRight' || e.key==='Enter'){ e.preventDefault(); ov.querySelector('#tourNext').click(); }
+    else if(e.key==='ArrowLeft'){ e.preventDefault(); showTourStep(_tourIdx-1); }
+  };
+  document.addEventListener('keydown', _tourKeyH, true);
+  _tourReposition = ()=> positionTour(TOUR_STEPS[_tourIdx]);
+  window.addEventListener('resize', _tourReposition);
+  window.addEventListener('scroll', _tourReposition, true);
+  showTourStep(0);
+  ov.querySelector('#tourNext').focus();
 }
-/* Descriptions a freshly-seeded option ships with (Travel / In office / On site …).
-   Computed once so the empty-state can treat them as placeholders rather than content. */
-let _seededSvcDescs = null;
-function seededServiceDescs(){
-  if(!_seededSvcDescs){
-    _seededSvcDescs = new Set();
-    blankOption('_').services.forEach(g=> (g.rows||[]).forEach(r=>{ const d=(r.desc||'').trim(); if(d) _seededSvcDescs.add(d); }));
+function showTourStep(i){
+  if(!_tourEl) return;
+  if(i<0) i=0;
+  if(i>=TOUR_STEPS.length){ return endTour(); }
+  _tourIdx = i;
+  const step = TOUR_STEPS[i];
+  _tourEl.querySelector('#tourTitle').innerHTML = step.title;
+  _tourEl.querySelector('#tourText').innerHTML = step.text;
+  _tourEl.querySelector('#tourCount').textContent = (i+1)+' / '+TOUR_STEPS.length;
+  _tourEl.querySelector('#tourBack').disabled = (i===0);
+  _tourEl.querySelector('#tourNext').textContent = (i>=TOUR_STEPS.length-1) ? 'Finish' : 'Next';
+  const target = step.sel ? document.querySelector(step.sel) : null;
+  if(target && target.scrollIntoView) target.scrollIntoView({block:'center', inline:'nearest'});
+  positionTour(step);
+}
+function positionTour(step){
+  if(!_tourEl) return;
+  const ring = _tourEl.querySelector('#tourRing'), pop = _tourEl.querySelector('#tourPop');
+  const target = step && step.sel ? document.querySelector(step.sel) : null;
+  if(!target){
+    ring.style.display = 'none';
+    pop.style.transform = 'translate(-50%,-50%)';
+    pop.style.top = '50%'; pop.style.left = '50%';
+    return;
   }
-  return _seededSvcDescs;
+  pop.style.transform = '';
+  const r = target.getBoundingClientRect(), pad = 6;
+  ring.style.display = 'block';
+  ring.style.top = (r.top-pad)+'px'; ring.style.left = (r.left-pad)+'px';
+  ring.style.width = (r.width+2*pad)+'px'; ring.style.height = (r.height+2*pad)+'px';
+  const pw = pop.offsetWidth, ph = pop.offsetHeight, gap = 12, vw = window.innerWidth, vh = window.innerHeight;
+  let top = r.bottom + gap;
+  if(top + ph > vh - 8) top = Math.max(8, r.top - gap - ph);   // flip above if no room below
+  let left = r.left + r.width/2 - pw/2;
+  left = Math.max(8, Math.min(left, vw - pw - 8));
+  pop.style.top = top+'px'; pop.style.left = left+'px';
 }
-/* Is the current option essentially empty (nothing entered yet)? Drives the empty-state card. */
-function optionIsEmpty(o){
-  if(!o) return true;
-  /* Ignore the seeded section dividers and default service rows — "empty" means nothing
-     has actually been entered. A service counts as content once it has a quantity, an
-     add-on, or a description the user changed from the seeded placeholder. */
-  const hasRows = arr => (arr||[]).some(r=> !r.isSection && ((r.desc||'').trim() || (r.part||'').trim() || (r.type||'').trim() || numOr(r.qty,0)>0 || (r.accessories&&r.accessories.length)));
-  const seeded = seededServiceDescs();
-  const hasSvc = (o.services||[]).some(g=> (g.rows||[]).some(s=>
-    numOr(s.qty,0)>0 || (s.addons&&s.addons.length) || ((s.desc||'').trim() && !seeded.has((s.desc||'').trim()))));
-  return !hasRows(o.fixtures) && !hasRows(o.controls) && !hasSvc;
-}
-function emptyStateHTML(){
-  return `<div class="empty-state no-print">
-    <div class="es-glow">💡</div>
-    <h3>Let’s build your lighting BOM</h3>
-    <p>Add fixtures and controls and price them here. When you’re ready, switch to <b>Procurement &amp; Shipping</b> and <b>Ship Advice</b> from the tabs up top.</p>
-    <div class="es-actions">
-      <button class="primary" onclick="addRow('fixtures')">+ Add a fixture</button>
-      <button class="ghost" onclick="openPasteModal('fixtures')" title="Paste rows from Excel or a spreadsheet">⊞ Paste from Excel</button>
-      <button class="ghost" onclick="openLibrary('fixtures')" title="Insert a saved part from your library">★ Insert from library</button>
-      <button class="ghost" onclick="openWelcome()">Quick tips</button>
-    </div>
-  </div>`;
+function endTour(){
+  if(_tourKeyH){ document.removeEventListener('keydown', _tourKeyH, true); _tourKeyH = null; }
+  if(_tourReposition){ window.removeEventListener('resize', _tourReposition); window.removeEventListener('scroll', _tourReposition, true); _tourReposition = null; }
+  if(_tourEl){ _tourEl.remove(); _tourEl = null; }
 }
 
 render();
@@ -5965,8 +6022,9 @@ updateSaveStamp();
 applyColVis();
 applySettings();
 resetHistory();
-const _restored = maybeRestoreAfterUpdate();   // carry work across a hosted-PWA version update
-if(!_restored) maybeShowWelcome();             // first-run welcome (skip if work was restored; fileHandle re-binds async)
+maybeRestoreAfterUpdate();   // carry work across a hosted-PWA version update
+/* Help & guided walkthrough are opt-in only (Help button / command palette) —
+   nothing pops up on its own. */
 document.addEventListener('click', ()=>{ closeColMenu(); });
 
 /* PWA file handler: when the installed app is launched by double-clicking a
