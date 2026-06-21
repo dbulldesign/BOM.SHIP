@@ -1105,6 +1105,17 @@
   .stm-mini[disabled]{opacity:.35;cursor:default}
   .stm-del:hover{color:var(--danger);border-color:var(--danger)}
 
+  /* ===== Preset manager (accessory & service add-on lists) ===== */
+  .pm-block{margin:10px 0 14px;padding-top:6px;border-top:1px solid var(--rule)}
+  .pm-block:first-of-type{border-top:none}
+  .pm-title{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+  .pm-head{display:grid;gap:6px;align-items:end;padding:0 2px 3px;font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft)}
+  .pm-rows{display:flex;flex-direction:column;gap:5px}
+  .pm-row{display:grid;gap:6px;align-items:center}
+  .pm-row input{font:inherit;font-size:.82rem;padding:5px 7px;border:1px solid var(--rule-dark);border-radius:3px;background:var(--sheet);color:var(--ink);min-width:0;width:100%}
+  .pm-row input.num{text-align:right;font-family:var(--mono)}
+  .pm-acts{display:inline-flex;gap:4px;justify-content:flex-end}
+
   /* ===== Schema-validated import ===== */
   .import-issues{margin:6px 0 4px;padding-left:20px;font-size:.82rem;line-height:1.5;max-height:46vh;overflow:auto}
   .import-issues li{margin-bottom:5px;color:var(--ink)}

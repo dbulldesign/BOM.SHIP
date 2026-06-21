@@ -1112,6 +1112,17 @@
   .stm-mini[disabled]{opacity:.35;cursor:default}
   .stm-del:hover{color:var(--danger);border-color:var(--danger)}
 
+  /* ===== Preset manager (accessory & service add-on lists) ===== */
+  .pm-block{margin:10px 0 14px;padding-top:6px;border-top:1px solid var(--rule)}
+  .pm-block:first-of-type{border-top:none}
+  .pm-title{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+  .pm-head{display:grid;gap:6px;align-items:end;padding:0 2px 3px;font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft)}
+  .pm-rows{display:flex;flex-direction:column;gap:5px}
+  .pm-row{display:grid;gap:6px;align-items:center}
+  .pm-row input{font:inherit;font-size:.82rem;padding:5px 7px;border:1px solid var(--rule-dark);border-radius:3px;background:var(--sheet);color:var(--ink);min-width:0;width:100%}
+  .pm-row input.num{text-align:right;font-family:var(--mono)}
+  .pm-acts{display:inline-flex;gap:4px;justify-content:flex-end}
+
   /* ===== Schema-validated import ===== */
   .import-issues{margin:6px 0 4px;padding-left:20px;font-size:.82rem;line-height:1.5;max-height:46vh;overflow:auto}
   .import-issues li{margin-bottom:5px;color:var(--ink)}
@@ -1686,7 +1697,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.46.0";
+const APP_VERSION = "1.47.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1857,8 +1868,11 @@ function blankAccessory(preset){
           qty:null /* null = inherit parent qty */, unitCost:(preset.unitCost!=null?preset.unitCost:0),
           mfrMult:1, markup:null, note:"", source:(preset.source!=null?preset.source:"")};
 }
-/* accessory presets pulled from the shipping template, with default prices and KLS est source */
-const ACCESSORY_PRESETS = [
+/* accessory presets pulled from the shipping template, with default prices and KLS est source.
+   These are the built-in DEFAULTS — the user can customize the live list (add / edit / remove /
+   reorder / reset) via the preset manager; their version is stored app-level in localStorage
+   (NOT in the job .json) so it follows the computer, not the file. See loadPresets(). */
+const ACCESSORY_PRESETS_DEFAULT = [
   {label:"Louver",        desc:"Hexcell Louver",        part:"LOUVER",  mfr:"MISC.", unitCost:2, source:"KLS est"},
   {label:"Spread Lens",   desc:"Spread Lens",           part:"SPREAD",  mfr:"MISC.", unitCost:3, source:"KLS est"},
   {label:"Color Filter",  desc:"Dichroic Color Filter", part:"DICHRO",  mfr:"MISC.", unitCost:5, source:"KLS est"},
@@ -1894,20 +1908,65 @@ const CONTROL_MFRS = [
   "Pathway Connectivity","ENTTEC","Mode Lighting","Encelium","Zumtobel","Bublinet","Echoflex"
 ];
 
-/* Accessory-style add-on presets, by the unit they attach to (all priced as DK est). */
-const TRIP_ADDONS = [
+/* Accessory-style add-on presets, by the unit they attach to (all priced as DK est).
+   Built-in DEFAULTS — see ACCESSORY_PRESETS_DEFAULT note and loadPresets(). */
+const TRIP_ADDONS_DEFAULT = [
   {label:"Round Trip Flight",        desc:"Round Trip Flight",         sellRate:500, source:"DK EST"},
   {label:"RT Travel – NYC Airport",  desc:"RT Travel – NYC Airport",   sellRate:75,  source:"DK EST"},
   {label:"RT Travel – Site Airport", desc:"RT Travel – Site Airport",  sellRate:75,  source:"DK EST"},
 ];
-const DAY_ADDONS = [
+const DAY_ADDONS_DEFAULT = [
   {label:"Hotel",                         desc:"Hotel",                          sellRate:250, source:"DK est"},
   {label:"Car Rental / RT Travel – Site", desc:"Car Rental / RT Travel – Site",  sellRate:75,  source:"DK est"},
   {label:"Breakfast",                     desc:"Breakfast",                      sellRate:10,  source:"DK est"},
   {label:"Lunch",                         desc:"Lunch",                          sellRate:20,  source:"DK est"},
   {label:"Dinner",                        desc:"Dinner",                         sellRate:50,  source:"DK est"},
 ];
-function addonsForUnit(unit){ return unit==='Trips' ? TRIP_ADDONS : (unit==='Days' ? DAY_ADDONS : null); }
+
+/* ---- Configurable presets (app-level, persisted in localStorage, NOT in the job .json) ----
+   Users can add / edit / remove / reorder the accessory and service add-on lists via the
+   preset manager (openPresetManager). We keep the built-in *_DEFAULT arrays as the fallback
+   and the "Reset to defaults" target. Each list is sanitized on load so a corrupt or
+   partial saved value can never break the add menus. */
+const PRESETS_KEY = 'lbom_presets_v1';
+let _presets = null;
+function _clonePresets(arr){ return JSON.parse(JSON.stringify(arr)); }
+function sanitizeAccessoryPreset(p){
+  p = p||{};
+  return {label:String(p.label!=null?p.label:'').trim()||'Accessory', desc:String(p.desc||''),
+          part:String(p.part||''), mfr:String(p.mfr||'MISC.'),
+          unitCost:numOr(p.unitCost,0), source:String(p.source||'')};
+}
+function sanitizeAddonPreset(p){
+  p = p||{};
+  return {label:String(p.label!=null?p.label:'').trim()||'Add-on', desc:String(p.desc||''),
+          sellRate:numOr(p.sellRate,0), source:String(p.source||'')};
+}
+function loadPresets(){
+  if(_presets) return _presets;
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(PRESETS_KEY)||'null'); }catch(e){}
+  _presets = {
+    accessories: (saved && Array.isArray(saved.accessories)) ? saved.accessories.map(sanitizeAccessoryPreset) : _clonePresets(ACCESSORY_PRESETS_DEFAULT),
+    tripAddons:  (saved && Array.isArray(saved.tripAddons))  ? saved.tripAddons.map(sanitizeAddonPreset)      : _clonePresets(TRIP_ADDONS_DEFAULT),
+    dayAddons:   (saved && Array.isArray(saved.dayAddons))   ? saved.dayAddons.map(sanitizeAddonPreset)       : _clonePresets(DAY_ADDONS_DEFAULT),
+  };
+  return _presets;
+}
+function savePresets(){ try{ localStorage.setItem(PRESETS_KEY, JSON.stringify(loadPresets())); }catch(e){} }
+function resetPresets(){
+  _presets = {
+    accessories: _clonePresets(ACCESSORY_PRESETS_DEFAULT),
+    tripAddons:  _clonePresets(TRIP_ADDONS_DEFAULT),
+    dayAddons:   _clonePresets(DAY_ADDONS_DEFAULT),
+  };
+  savePresets();
+}
+function accessoryPresets(){ return loadPresets().accessories; }
+function addonsForUnit(unit){
+  const p = loadPresets();
+  return unit==='Trips' ? p.tripAddons : (unit==='Days' ? p.dayAddons : null);
+}
 function blankServiceAddon(preset){
   preset = preset||{};
   return {id:uid(), desc:preset.desc||"", sellRate:(preset.sellRate!=null?preset.sellRate:0),
@@ -2594,7 +2653,13 @@ function openSettings(){
     <label class="set-opt"><input type="checkbox" id="setStickyHead" ${uiSettings.stickyHead!==false?'checked':''}>
       <span><b>Sticky headers &amp; totals</b><br><span class="set-sub">Keep table headers and the grand-total row visible while scrolling.</span></span></label>
     <label class="set-opt"><input type="checkbox" id="setFreezeCols" ${uiSettings.freezeCols?'checked':''}>
-      <span><b>Freeze identifier columns</b><br><span class="set-sub">Pin the left columns (through <b>Description</b>) on the fixtures &amp; controls tables so they stay visible when scrolling right.</span></span></label>`;
+      <span><b>Freeze identifier columns</b><br><span class="set-sub">Pin the left columns (through <b>Description</b>) on the fixtures &amp; controls tables so they stay visible when scrolling right.</span></span></label>
+    <hr class="set-div">
+    <div class="set-opt"><div style="width:100%">
+      <b>Quick-add presets</b>
+      <div class="set-sub">Customize the accessory and service add-on lists (shared across all jobs on this computer).</div>
+      <div class="lib-io" style="margin-top:6px"><button type="button" class="ghost" id="setEditPresets">Edit accessory &amp; service presets…</button></div>
+    </div></div>`;
   openModal({
     title:'Settings', bodyHTML:body, wide:false,
     cancelLabel:'Close', confirmLabel:'Accept',
@@ -2623,6 +2688,8 @@ function openSettings(){
       if(sh) sh.addEventListener('change', ()=>{ setStickyHead(sh.checked); dirtyUI(); });
       const fz = back.querySelector('#setFreezeCols');
       if(fz) fz.addEventListener('change', ()=>{ setFreezeCols(fz.checked); dirtyUI(); });
+      const ep = back.querySelector('#setEditPresets');
+      if(ep) ep.addEventListener('click', ()=>{ closeModal(); openPresetManager(); });
     }
   });
 }
@@ -3104,7 +3171,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <span class="acc-menu" data-accmenu="${kind}_${i}">
         <button class="acc-add-btn" onclick="toggleAccMenu('${kind}_${i}')">+ Add accessory ▾</button>
         <span class="acc-menu-list" id="accmenu_${kind}_${i}" style="display:none">
-          ${ACCESSORY_PRESETS.map((p,pi)=>`<button onclick="addAccessory('${kind}',${i},${pi})">${esc(p.label)}</button>`).join('')}
+          ${accessoryPresets().map((p,pi)=>`<button onclick="addAccessory('${kind}',${i},${pi})">${esc(p.label)}</button>`).join('')}
         </span>
       </span></td></tr>`;
     return toggleRow + accHTML + addRowHTML;
@@ -4265,7 +4332,7 @@ function addRowToSection(kind, secIdx){
 function addAccessory(kind, i, presetIdx){
   const row = state.options[state.current][kind][i];
   if(!row.accessories) row.accessories = [];
-  row.accessories.push(blankAccessory(ACCESSORY_PRESETS[presetIdx]));
+  row.accessories.push(blankAccessory(accessoryPresets()[presetIdx]));
   accExpanded.add(row.id);   // keep the accessory group open after adding
   closeAccMenus(); markDirty(); render();
 }
@@ -4757,6 +4824,93 @@ function openStatusManager(){
       bind();
     },
     onCancel(){ renderShipping(); }   // refresh the dropdowns after editing the list
+  });
+}
+
+/* ---- Preset manager: edit the accessory & service add-on quick-add lists ----
+   App-level config (localStorage, shared across jobs on this computer; never written to a
+   job .json). Add / edit / remove / reorder each list, or reset everything to the built-ins. */
+function openPresetManager(){
+  const P = loadPresets();
+  const accCols = [
+    {f:'label',   ph:'Menu label', w:'1.2fr'},
+    {f:'desc',    ph:'Description', w:'1.4fr'},
+    {f:'part',    ph:'Part No.',    w:'0.9fr'},
+    {f:'mfr',     ph:'Mfr',         w:'0.8fr'},
+    {f:'unitCost',ph:'Unit cost',   w:'0.7fr', num:true},
+    {f:'source',  ph:'Price source',w:'0.9fr'},
+  ];
+  const addCols = [
+    {f:'label',   ph:'Menu label', w:'1.2fr'},
+    {f:'desc',    ph:'Description', w:'1.6fr'},
+    {f:'sellRate',ph:'Sell rate',  w:'0.7fr', num:true},
+    {f:'source',  ph:'Source',     w:'0.9fr'},
+  ];
+  const lists = [
+    {key:'accessories', title:'Fixture / control accessories', sub:'Shown in the “+ Add accessory” menu on fixture and control rows.', cols:accCols, blank:{label:'New accessory',desc:'',part:'',mfr:'MISC.',unitCost:0,source:''}},
+    {key:'tripAddons',  title:'Trip add-ons (Services · Trips)', sub:'Shown in the “+ Add travel item” menu on Services lines whose unit is Trips.', cols:addCols, blank:{label:'New trip item',desc:'',sellRate:0,source:''}},
+    {key:'dayAddons',   title:'Day add-ons (Services · Days)',   sub:'Shown in the “+ Add day item” menu on Services lines whose unit is Days.',  cols:addCols, blank:{label:'New day item',desc:'',sellRate:0,source:''}},
+  ];
+  const drawList = (L)=>{
+    const arr = P[L.key];
+    const head = `<div class="pm-head" style="grid-template-columns:${L.cols.map(c=>c.w).join(' ')} auto">`
+      + L.cols.map(c=>`<span>${esc(c.ph)}</span>`).join('') + `<span></span></div>`;
+    const rows = arr.map((p,i)=>`
+      <div class="pm-row" style="grid-template-columns:${L.cols.map(c=>c.w).join(' ')} auto">
+        ${L.cols.map(c=>`<input class="${c.num?'num':''}" ${c.num?'inputmode="decimal"':''} value="${esc(c.num?String(numOr(p[c.f],0)):(p[c.f]||''))}" placeholder="${esc(c.ph)}" data-pl="${L.key}" data-i="${i}" data-f="${c.f}" aria-label="${esc(c.ph)}">`).join('')}
+        <span class="pm-acts">
+          <button class="stm-mini" data-pl="${L.key}" data-mv="up" data-i="${i}" ${i===0?'disabled':''} title="Move up">▲</button>
+          <button class="stm-mini" data-pl="${L.key}" data-mv="down" data-i="${i}" ${i===arr.length-1?'disabled':''} title="Move down">▼</button>
+          <button class="stm-mini stm-del" data-pl="${L.key}" data-del="${i}" title="Delete">✕</button>
+        </span>
+      </div>`).join('');
+    return `<div class="pm-block">
+      <div class="pm-title"><b>${esc(L.title)}</b><span class="set-sub">${esc(L.sub)}</span></div>
+      ${head}
+      <div class="pm-rows">${rows||'<div class="dim" style="padding:6px">No presets — add one below.</div>'}</div>
+      <div class="lib-io"><button class="ghost" data-pl-add="${L.key}">+ Add preset</button></div>
+    </div>`;
+  };
+  const draw = ()=>`<p class="paste-help">Quick-add presets for accessories and service add-ons. These live on <b>this computer</b> (shared across all jobs) and are never saved into a project file. Reorder with ▲▼; the order here is the order they appear in the add menus.</p>`
+    + lists.map(drawList).join('')
+    + `<div class="lib-io" style="margin-top:10px"><button class="ghost" id="pmReset">↺ Reset all to defaults</button></div>`;
+  openModal({
+    title:'Edit accessory & service presets', wide:true, cancelLabel:'Done', bodyHTML:draw(),
+    onOpen(back){
+      const body = back.querySelector('.modal-body');
+      const refresh = ()=>{ body.innerHTML = draw(); bind(); };
+      function bind(){
+        back.querySelectorAll('input[data-pl]').forEach(inp=> inp.addEventListener('change', ()=>{
+          const arr = P[inp.dataset.pl]; const row = arr[+inp.dataset.i]; if(!row) return;
+          const f = inp.dataset.f;
+          if(f==='unitCost' || f==='sellRate') row[f] = numOr(inp.value,0);
+          else row[f] = inp.value;
+          savePresets();
+        }));
+        back.querySelectorAll('button[data-mv]').forEach(b=> b.addEventListener('click', ()=>{
+          const arr = P[b.dataset.pl]; const i=+b.dataset.i, j=b.dataset.mv==='up'?i-1:i+1;
+          if(j<0||j>=arr.length) return; const t=arr[i]; arr[i]=arr[j]; arr[j]=t; savePresets(); refresh();
+        }));
+        back.querySelectorAll('button[data-del]').forEach(b=> b.addEventListener('click', ()=>{
+          P[b.dataset.pl].splice(+b.dataset.del,1); savePresets(); refresh();
+        }));
+        back.querySelectorAll('button[data-pl-add]').forEach(b=> b.addEventListener('click', ()=>{
+          const L = lists.find(x=>x.key===b.dataset.plAdd);
+          P[L.key].push(JSON.parse(JSON.stringify(L.blank))); savePresets(); refresh();
+        }));
+        const reset = back.querySelector('#pmReset');
+        if(reset) reset.addEventListener('click', async ()=>{
+          const ok = await showConfirm('Reset presets?', 'Replace the accessory and service add-on lists with the built-in defaults? This only affects this computer.', 'Reset', 'danger');
+          if(!ok) return;
+          resetPresets();
+          // refresh our local handle to the new arrays
+          const np = loadPresets(); P.accessories=np.accessories; P.tripAddons=np.tripAddons; P.dayAddons=np.dayAddons;
+          refresh(); toast('Presets reset to defaults');
+        });
+      }
+      bind();
+    },
+    onCancel(){ render(); }   // re-render so any open add menus rebuild from the new lists
   });
 }
 function userStatusCell(l, editable){
@@ -7088,6 +7242,7 @@ function commandList(){
   add('Purchase orders by vendor…','Export',()=>openPurchaseOrders());
   add('Settings','App',()=>openSettings());
   add('Project defaults','App',()=>openProjectDefaults());
+  add('Edit accessory & service presets','App',()=>openPresetManager());
   add('Keyboard shortcuts','App',()=>openShortcuts());
   add('Toggle dark / light theme','App',()=>{ const t=document.getElementById('themeToggle'); if(t) t.checked=!document.body.classList.contains('dark'); toggleTheme(); });
   add('Go to: Estimate','View',()=>setView('estimate'));
