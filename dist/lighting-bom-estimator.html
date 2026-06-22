@@ -874,16 +874,18 @@
     body.bom-cards .ship-scroll,
     body.bom-cards .foraccess{overflow:visible}
 
-    /* Tear down the table grid so rows can stack */
+    /* Tear down the table grid so rows can stack. min-width:0 is essential — the
+       tables carry min-width:980px (so columns fit when scrolling); without this
+       reset that forces the whole card 980px wide and off the page. */
     body.bom-cards .bom-table,
     body.bom-cards .svc-table,
-    body.bom-cards .ship-table{display:block;width:100%;border:0;table-layout:auto}
+    body.bom-cards .ship-table{display:block;width:100%;min-width:0;border:0;table-layout:auto}
     body.bom-cards .bom-table>colgroup,  body.bom-cards .bom-table>thead,
     body.bom-cards .svc-table>colgroup,  body.bom-cards .svc-table>thead,
     body.bom-cards .ship-table>colgroup, body.bom-cards .ship-table>thead{display:none}
     body.bom-cards .bom-table>tbody,
     body.bom-cards .svc-table>tbody,
-    body.bom-cards .ship-table>tbody{display:block;width:100%}
+    body.bom-cards .ship-table>tbody{display:block;width:100%;min-width:0}
     body.bom-cards .bom-table tr,
     body.bom-cards .svc-table tr,
     body.bom-cards .ship-table tr{display:block}
@@ -1956,7 +1958,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.61.2";
+const APP_VERSION = "1.61.3";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
