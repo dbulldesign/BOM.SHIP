@@ -341,8 +341,12 @@
   .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;
     display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
   .modal{background:var(--sheet);border:2px solid var(--ink);min-width:320px;max-width:420px;
-    padding:24px 26px 20px;box-shadow:0 8px 32px rgba(0,0,0,.22)}
-  .modal h4{font-size:.95rem;font-weight:700;margin-bottom:8px;color:var(--ink)}
+    padding:24px 26px 20px;box-shadow:0 8px 32px rgba(0,0,0,.22);
+    display:flex;flex-direction:column;max-height:92vh;overflow:hidden}
+  .modal h4{font-size:.95rem;font-weight:700;margin-bottom:8px;color:var(--ink);flex:0 0 auto}
+  /* The body scrolls when content is tall so the header and buttons stay reachable */
+  .modal-body{flex:1 1 auto;overflow-y:auto;min-height:0}
+  .modal-btns{flex:0 0 auto}
   .modal p{font-size:.84rem;color:var(--ink-soft);margin-bottom:20px;line-height:1.5}
   .modal-btns{display:flex;gap:10px;justify-content:flex-end}
   .modal-btns button{min-width:80px}
@@ -846,11 +850,11 @@
 
     /* Modals fill the screen */
     .modal-backdrop{align-items:flex-end}
-    .modal{min-width:0;max-width:none;width:100%;max-height:90vh;overflow:auto;
+    .modal{min-width:0;max-width:none;width:100%;max-height:90vh;overflow:hidden;
       padding:18px 16px calc(18px + env(safe-area-inset-bottom));
       border-radius:14px 14px 0 0;border-width:0}
     .modal-wide,.modal-xwide{width:100%;max-width:none}
-    .modal-btns{position:sticky;bottom:0;background:var(--sheet);padding-top:10px}
+    .modal-btns{background:var(--sheet);padding-top:10px}
 
     /* Bigger hit areas for the tiny row controls */
     .rowdel,.rowact,.linkbtn,.sec-toggle,.acc-collapse-btn{min-width:34px;min-height:34px}
@@ -859,6 +863,62 @@
     .stamp-row.tax{flex-wrap:wrap;gap:4px}
     .stamp-row.tax .lbl{flex:1 1 auto;min-width:0}
     .stamp input{width:90px;font-size:16px;padding:4px 7px}
+  }
+
+  /* ===== Phone card view (each fixture/control as a stacked, labeled card) =====
+     Opt-in via Settings → “Card view on phones” (body.bom-cards), and only active
+     inside the phone breakpoint so wider screens keep the spreadsheet table. */
+  @media (max-width:760px){
+    body.bom-cards .section .table-scroll{overflow:visible}
+    body.bom-cards .bom-table{display:block;width:100%;border:0;table-layout:auto}
+    body.bom-cards .bom-table>colgroup,
+    body.bom-cards .bom-table>thead{display:none}
+    body.bom-cards .bom-table>tbody{display:block;width:100%}
+    body.bom-cards .bom-table tr{display:block}
+
+    /* Data rows become cards; accessory cards nest under their fixture */
+    body.bom-cards .bom-table tr[data-ri],
+    body.bom-cards .bom-table tr.acc-row{
+      border:1px solid var(--rule);border-radius:10px;background:var(--sheet);
+      margin:0 0 10px;padding:6px 11px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+    body.bom-cards .bom-table tr.acc-row{margin-left:16px;background:var(--amber-wash)}
+
+    /* Labeled cells: “LABEL  value” on one flex line */
+    body.bom-cards .bom-table td[data-label]{
+      display:flex;align-items:center;gap:10px;width:auto!important;
+      padding:5px 0;border-bottom:1px dashed var(--rule);text-align:left}
+    body.bom-cards .bom-table tr[data-ri] td[data-label]:last-of-type,
+    body.bom-cards .bom-table tr.acc-row td[data-label]:last-of-type{border-bottom:0}
+    body.bom-cards .bom-table td[data-label]::before{
+      content:attr(data-label);flex:0 0 88px;color:var(--ink-soft);
+      font:600 .68rem/1.3 var(--ui);text-transform:uppercase;letter-spacing:.05em}
+    body.bom-cards .bom-table td[data-label]>*{flex:1 1 auto;min-width:0}
+    body.bom-cards .bom-table td[data-label] input,
+    body.bom-cards .bom-table td[data-label] textarea{width:100%}
+    /* Calc cells carry a bare text value (no input) — keep it monospace + readable */
+    body.bom-cards .bom-table td.calc{font-family:var(--mono);justify-content:flex-start}
+    body.bom-cards .bom-table td.calc.sell{color:var(--sell);font-weight:700}
+
+    /* Drop the drag/select gutter and the always-empty accessory Tag line */
+    body.bom-cards .bom-table td.col-lead{display:none}
+    body.bom-cards .bom-table tr.acc-row td.col-tag{display:none}
+
+    /* Row buttons become a right-aligned footer strip */
+    body.bom-cards .bom-table td.card-actions{
+      display:flex;justify-content:flex-end;gap:6px;width:auto!important;
+      padding:8px 0 2px;border:0;text-align:right}
+    body.bom-cards .bom-table td.card-actions::before{content:none}
+
+    /* Full-width utility rows (section divider, accessory toggle, “+ add” bars)
+       stay as plain blocks — not cards */
+    body.bom-cards .bom-table tr.section-row,
+    body.bom-cards .bom-table tr.acc-toggle-row,
+    body.bom-cards .bom-table tr.acc-row.no-print{
+      border:0;background:transparent;box-shadow:none;margin:0;padding:0}
+    body.bom-cards .bom-table tr.acc-row.no-print,
+    body.bom-cards .bom-table tr.acc-toggle-row{margin-left:16px}
+    body.bom-cards .bom-table td[colspan]{display:block;width:auto!important;padding:6px 0}
+    body.bom-cards .bom-table td[colspan]::before{content:none}
   }
 
   /* ===== Version badge & update banner ===== */
@@ -1371,7 +1431,7 @@
   <button class="ghost" onclick="openProjectDefaults()" title="Per-project defaults (markups, tax, company) — export/import to reuse">Defaults</button>
   <button class="ghost" onclick="openSettings()" title="Display settings">⚙ Settings</button>
   <button class="ghost" onclick="openHelp()" title="Help &amp; guide — feature manual and a click-through walkthrough">❔ Help</button>
-  <button class="ghost" onclick="openShortcuts()" title="Keyboard shortcuts (press ?)">?</button>
+  <button class="ghost" onclick="openShortcuts()" title="Keyboard shortcuts (press ?)">Shortcuts</button>
   <label class="theme-switch" title="Toggle light / dark mode">
     <input type="checkbox" id="themeToggle" onchange="toggleTheme()" aria-label="Toggle light or dark mode">
     <span class="theme-track">
@@ -1852,7 +1912,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.59.0";
+const APP_VERSION = "1.60.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2920,7 +2980,7 @@ function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); el
 
 /* Global display settings (local to this browser). */
 const SETTINGS_KEY = 'lbom_settings_v1';
-const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true, freezeCols:false };
+const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true, freezeCols:false, cardView:true };
 let uiSettings = loadSettings();
 function loadSettings(){ try{ return Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {...SETTINGS_DEFAULTS}; } }
 function saveSettings(){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(uiSettings)); }catch(e){} }
@@ -2932,6 +2992,9 @@ function applySettings(){
   b.classList.toggle('density-compact', uiSettings.density==='compact');
   b.classList.toggle('sticky-head', uiSettings.stickyHead!==false);
   b.classList.toggle('freeze-cols', !!uiSettings.freezeCols);
+  /* Card view: the CSS only activates inside the phone media query, so this class
+     is a no-op on wide screens regardless of the setting. */
+  b.classList.toggle('bom-cards', uiSettings.cardView!==false);
   const scale = Math.min(1.4, Math.max(0.8, numOr(uiSettings.textScale,1)));
   b.style.setProperty('--ui-scale', String(scale));
 }
@@ -2941,12 +3004,16 @@ function setDensity(mode){ uiSettings.density = (mode==='compact'?'compact':'com
 function setTextScale(v){ uiSettings.textScale = Math.min(1.4, Math.max(0.8, numOr(v,1))); saveSettings(); applySettings(); }
 function setStickyHead(on){ uiSettings.stickyHead = !!on; saveSettings(); applySettings(); }
 function setFreezeCols(on){ uiSettings.freezeCols = !!on; saveSettings(); applySettings(); render(); }
+function setCardView(on){ uiSettings.cardView = !!on; saveSettings(); applySettings(); }
 
 /* Freeze the left identifier columns (through Description) of the fixtures &
    controls tables so they stay visible when scrolling wide tables horizontally.
    Measures the live header widths and pins those cells with position:sticky. */
 function applyFreeze(){
   if(!uiSettings.freezeCols) return;
+  /* Card view replaces the table layout on phones — pinning columns there makes
+     no sense and would fight the card CSS, so skip it. */
+  if(uiSettings.cardView!==false && window.matchMedia('(max-width:760px)').matches) return;
   const pane = document.getElementById('pane'); if(!pane) return;
   const ID_COLS = new Set(['qty','type','tag','mfr','part','desc']);   // the left identifier block
   pane.querySelectorAll('.section table').forEach(table=>{
@@ -3007,6 +3074,8 @@ function openSettings(){
       <span><b>Sticky headers</b><br><span class="set-sub">Keep table column headers visible while scrolling long tables.</span></span></label>
     <label class="set-opt"><input type="checkbox" id="setFreezeCols" ${uiSettings.freezeCols?'checked':''}>
       <span><b>Freeze identifier columns</b><br><span class="set-sub">Pin the left columns (through <b>Description</b>) on the fixtures &amp; controls tables so they stay visible when scrolling right.</span></span></label>
+    <label class="set-opt"><input type="checkbox" id="setCardView" ${uiSettings.cardView!==false?'checked':''}>
+      <span><b>Card view on phones</b><br><span class="set-sub">On narrow screens, show each fixture &amp; control as a stacked card with labeled fields instead of a wide, side-scrolling table. No effect on larger screens.</span></span></label>
     <hr class="set-div">
     <div class="set-opt"><div style="width:100%">
       <b>Quick-add presets</b>
@@ -3041,6 +3110,8 @@ function openSettings(){
       if(sh) sh.addEventListener('change', ()=>{ setStickyHead(sh.checked); dirtyUI(); });
       const fz = back.querySelector('#setFreezeCols');
       if(fz) fz.addEventListener('change', ()=>{ setFreezeCols(fz.checked); dirtyUI(); });
+      const cv = back.querySelector('#setCardView');
+      if(cv) cv.addEventListener('change', ()=>{ setCardView(cv.checked); dirtyUI(); });
       const ep = back.querySelector('#setEditPresets');
       if(ep) ep.addEventListener('click', ()=>{ closeModal(); openPresetManager(); });
     }
@@ -3432,22 +3503,22 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const val  = isInherit ? "" : pct2x(markupVal);
     const iCls = isInherit ? " mk-inherit" : "";
     const ph   = pct2x(defMarkup);
-    return `<td class="${colCls||''}" style="width:78px"><input class="num${iCls}" inputmode="decimal" value="${val}" placeholder="${ph}" title="Enter a multiplier (1.5) or percent (50%)" ${dataAttrs} data-f="markup"></td>`;
+    return `<td class="${colCls||''}" data-label="Markup" style="width:78px"><input class="num${iCls}" inputmode="decimal" value="${val}" placeholder="${ph}" title="Enter a multiplier (1.5) or percent (50%)" ${dataAttrs} data-f="markup"></td>`;
   }
 
   function fixtureRowHTML(r, i){
     const c = rowCalc(r, defMarkup);
     const da = `data-k="${kind}" data-i="${i}"`;
     const tagCell = allowAccessories
-      ? `<td class="col-tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
+      ? `<td class="col-tag" data-label="Tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
       : '';
     const grp = r.linkId ? linkInfo[r.linkId] : null;
     const linkCls = r.linkId ? (r.linkMaster ? ' link-master' : ' link-linked') : '';
     const picking = (_linkPick && allowAccessories && r.linkId!==_linkPick) ? ' link-pickable' : '';
     const isLinkedFollower = r.linkId && !r.linkMaster;
     const costCell = isLinkedFollower
-      ? `<td style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
-      : `<td style="width:88px"><input class="num" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost"></td>`;
+      ? `<td data-label="Unit cost" style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
+      : `<td data-label="Unit cost" style="width:88px"><input class="num" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost"></td>`;
     /* Link control: the master shows a "★ Master A" chip; each follower shows a
        "🔗 A → F1" chip naming the master it's linked to. The group letter + colour
        (and the matching left stripe) tie members together; hovering any member
@@ -3467,21 +3538,21 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const linkAttr = grp ? ` data-link="${r.linkId}"` : '';
     return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${linkCls}${picking}"${stripeStyle}>
       ${selCell(r)}
-      <td style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-f="qty"></td>
-      <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
+      <td data-label="Qty" style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-f="qty"></td>
+      <td data-label="Type" style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
-      <td style="width:120px"><input list="${allowAccessories?'memMfr':'ctrlMfr'}" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
-      <td style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
-      <td style="min-width:170px" class="col-desc">${txtField(r.desc, da, 'desc', 'Part description', {list:'memDesc'})}</td>
+      <td data-label="Mfr" style="width:120px"><input list="${allowAccessories?'memMfr':'ctrlMfr'}" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
+      <td data-label="Part #" style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
+      <td data-label="Description" style="min-width:170px" class="col-desc">${txtField(r.desc, da, 'desc', 'Part description', {list:'memDesc'})}</td>
       ${costCell}
-      <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(r)}" placeholder="1" title="Manufacturer multiplier (scales unit cost)" ${da} data-f="mfrMult"></td>
+      <td data-label="Mfr ×" style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(r)}" placeholder="1" title="Manufacturer multiplier (scales unit cost)" ${da} data-f="mfrMult"></td>
       ${mkCell(r.markup, da, 'col-markup')}
-      <td class="calc" style="width:88px">${money(c.unitSell)}</td>
-      <td class="calc" style="width:96px">${money(c.extCost)}</td>
-      <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
-      <td class="col-source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
-      <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
-      <td style="width:110px" class="no-print row-actions">
+      <td class="calc" data-label="Unit sell" style="width:88px">${money(c.unitSell)}</td>
+      <td class="calc" data-label="Ext. cost" style="width:96px">${money(c.extCost)}</td>
+      <td class="calc sell" data-label="Ext. sell" style="width:104px">${money(c.extSell)}</td>
+      <td class="col-source" data-label="Price source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
+      <td class="col-notes" data-label="Notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
+      <td style="width:110px" class="no-print row-actions card-actions">
         ${selCol?'':`<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select for bulk edit (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">`}
         ${linkBtn}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
@@ -3506,21 +3577,21 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       const mInherit = (a.markup===null||a.markup==="");
       return `<tr class="acc-row">
         <td class="col-lead no-print"></td>
-        <td style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
-        <td style="width:78px"><span class="acc-pill">Acc</span></td>
-        <td class="col-tag" style="width:118px"></td>
-        <td style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
-        <td style="width:130px" class="col-part">${txtField(a.part, da, 'accpart', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:a.part})}</td>
-        <td style="min-width:170px" class="col-desc"><span class="acc-tag">${txtField(a.desc, da, 'accdesc', 'Accessory (louver, lens, filter…)', {list:'memDesc'})}</span></td>
-        <td style="width:88px"><input class="num" inputmode="decimal" value="${costVal(a.unitCost)}" placeholder="0.00" ${da} data-f="accunitCost"></td>
-        <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(a)}" placeholder="1" title="Manufacturer multiplier" ${da} data-f="accmfrMult"></td>
-        <td class="col-markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
-        <td class="calc" style="width:88px">${money(ac.unitSell)}</td>
-        <td class="calc" style="width:96px">${money(ac.extCost)}</td>
-        <td class="calc sell" style="width:104px">${money(ac.extSell)}</td>
-        <td class="col-source" style="width:130px">${txtField(a.source||'', da, 'accsource', 'Price source', {})}</td>
-        <td class="col-notes" style="width:150px">${txtField(a.note||'', da, 'accnote', 'Notes', {})}</td>
-        <td style="width:30px" class="no-print"><button class="rowdel" title="Delete accessory" onclick="delAccessory('${kind}',${i},${ai})">✕</button></td>
+        <td data-label="Qty" style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
+        <td data-label="Type" style="width:78px"><span class="acc-pill">Acc</span></td>
+        <td class="col-tag" data-label="Tag" style="width:118px"></td>
+        <td data-label="Mfr" style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
+        <td data-label="Part #" style="width:130px" class="col-part">${txtField(a.part, da, 'accpart', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:a.part})}</td>
+        <td data-label="Description" style="min-width:170px" class="col-desc"><span class="acc-tag">${txtField(a.desc, da, 'accdesc', 'Accessory (louver, lens, filter…)', {list:'memDesc'})}</span></td>
+        <td data-label="Unit cost" style="width:88px"><input class="num" inputmode="decimal" value="${costVal(a.unitCost)}" placeholder="0.00" ${da} data-f="accunitCost"></td>
+        <td data-label="Mfr ×" style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(a)}" placeholder="1" title="Manufacturer multiplier" ${da} data-f="accmfrMult"></td>
+        <td class="col-markup" data-label="Markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
+        <td class="calc" data-label="Unit sell" style="width:88px">${money(ac.unitSell)}</td>
+        <td class="calc" data-label="Ext. cost" style="width:96px">${money(ac.extCost)}</td>
+        <td class="calc sell" data-label="Ext. sell" style="width:104px">${money(ac.extSell)}</td>
+        <td class="col-source" data-label="Price source" style="width:130px">${txtField(a.source||'', da, 'accsource', 'Price source', {})}</td>
+        <td class="col-notes" data-label="Notes" style="width:150px">${txtField(a.note||'', da, 'accnote', 'Notes', {})}</td>
+        <td style="width:30px" class="no-print card-actions"><button class="rowdel" title="Delete accessory" onclick="delAccessory('${kind}',${i},${ai})">✕</button></td>
       </tr>`;
     }).join("");
     const addRowHTML = `<tr class="acc-row no-print"><td class="acc-add-cell" colspan="${NCOLS}">

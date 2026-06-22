@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.59.0";
+const APP_VERSION = "1.60.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1079,7 +1079,7 @@ function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); el
 
 /* Global display settings (local to this browser). */
 const SETTINGS_KEY = 'lbom_settings_v1';
-const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true, freezeCols:false };
+const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true, freezeCols:false, cardView:true };
 let uiSettings = loadSettings();
 function loadSettings(){ try{ return Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}); }catch(e){ return {...SETTINGS_DEFAULTS}; } }
 function saveSettings(){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(uiSettings)); }catch(e){} }
@@ -1091,6 +1091,9 @@ function applySettings(){
   b.classList.toggle('density-compact', uiSettings.density==='compact');
   b.classList.toggle('sticky-head', uiSettings.stickyHead!==false);
   b.classList.toggle('freeze-cols', !!uiSettings.freezeCols);
+  /* Card view: the CSS only activates inside the phone media query, so this class
+     is a no-op on wide screens regardless of the setting. */
+  b.classList.toggle('bom-cards', uiSettings.cardView!==false);
   const scale = Math.min(1.4, Math.max(0.8, numOr(uiSettings.textScale,1)));
   b.style.setProperty('--ui-scale', String(scale));
 }
@@ -1100,12 +1103,16 @@ function setDensity(mode){ uiSettings.density = (mode==='compact'?'compact':'com
 function setTextScale(v){ uiSettings.textScale = Math.min(1.4, Math.max(0.8, numOr(v,1))); saveSettings(); applySettings(); }
 function setStickyHead(on){ uiSettings.stickyHead = !!on; saveSettings(); applySettings(); }
 function setFreezeCols(on){ uiSettings.freezeCols = !!on; saveSettings(); applySettings(); render(); }
+function setCardView(on){ uiSettings.cardView = !!on; saveSettings(); applySettings(); }
 
 /* Freeze the left identifier columns (through Description) of the fixtures &
    controls tables so they stay visible when scrolling wide tables horizontally.
    Measures the live header widths and pins those cells with position:sticky. */
 function applyFreeze(){
   if(!uiSettings.freezeCols) return;
+  /* Card view replaces the table layout on phones — pinning columns there makes
+     no sense and would fight the card CSS, so skip it. */
+  if(uiSettings.cardView!==false && window.matchMedia('(max-width:760px)').matches) return;
   const pane = document.getElementById('pane'); if(!pane) return;
   const ID_COLS = new Set(['qty','type','tag','mfr','part','desc']);   // the left identifier block
   pane.querySelectorAll('.section table').forEach(table=>{
@@ -1166,6 +1173,8 @@ function openSettings(){
       <span><b>Sticky headers</b><br><span class="set-sub">Keep table column headers visible while scrolling long tables.</span></span></label>
     <label class="set-opt"><input type="checkbox" id="setFreezeCols" ${uiSettings.freezeCols?'checked':''}>
       <span><b>Freeze identifier columns</b><br><span class="set-sub">Pin the left columns (through <b>Description</b>) on the fixtures &amp; controls tables so they stay visible when scrolling right.</span></span></label>
+    <label class="set-opt"><input type="checkbox" id="setCardView" ${uiSettings.cardView!==false?'checked':''}>
+      <span><b>Card view on phones</b><br><span class="set-sub">On narrow screens, show each fixture &amp; control as a stacked card with labeled fields instead of a wide, side-scrolling table. No effect on larger screens.</span></span></label>
     <hr class="set-div">
     <div class="set-opt"><div style="width:100%">
       <b>Quick-add presets</b>
@@ -1200,6 +1209,8 @@ function openSettings(){
       if(sh) sh.addEventListener('change', ()=>{ setStickyHead(sh.checked); dirtyUI(); });
       const fz = back.querySelector('#setFreezeCols');
       if(fz) fz.addEventListener('change', ()=>{ setFreezeCols(fz.checked); dirtyUI(); });
+      const cv = back.querySelector('#setCardView');
+      if(cv) cv.addEventListener('change', ()=>{ setCardView(cv.checked); dirtyUI(); });
       const ep = back.querySelector('#setEditPresets');
       if(ep) ep.addEventListener('click', ()=>{ closeModal(); openPresetManager(); });
     }
@@ -1591,22 +1602,22 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const val  = isInherit ? "" : pct2x(markupVal);
     const iCls = isInherit ? " mk-inherit" : "";
     const ph   = pct2x(defMarkup);
-    return `<td class="${colCls||''}" style="width:78px"><input class="num${iCls}" inputmode="decimal" value="${val}" placeholder="${ph}" title="Enter a multiplier (1.5) or percent (50%)" ${dataAttrs} data-f="markup"></td>`;
+    return `<td class="${colCls||''}" data-label="Markup" style="width:78px"><input class="num${iCls}" inputmode="decimal" value="${val}" placeholder="${ph}" title="Enter a multiplier (1.5) or percent (50%)" ${dataAttrs} data-f="markup"></td>`;
   }
 
   function fixtureRowHTML(r, i){
     const c = rowCalc(r, defMarkup);
     const da = `data-k="${kind}" data-i="${i}"`;
     const tagCell = allowAccessories
-      ? `<td class="col-tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
+      ? `<td class="col-tag" data-label="Tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
       : '';
     const grp = r.linkId ? linkInfo[r.linkId] : null;
     const linkCls = r.linkId ? (r.linkMaster ? ' link-master' : ' link-linked') : '';
     const picking = (_linkPick && allowAccessories && r.linkId!==_linkPick) ? ' link-pickable' : '';
     const isLinkedFollower = r.linkId && !r.linkMaster;
     const costCell = isLinkedFollower
-      ? `<td style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
-      : `<td style="width:88px"><input class="num" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost"></td>`;
+      ? `<td data-label="Unit cost" style="width:88px"><input class="num linked-cost" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost" readonly title="Shared cost — edit it on the master (★)"></td>`
+      : `<td data-label="Unit cost" style="width:88px"><input class="num" inputmode="decimal" value="${costVal(r.unitCost)}" placeholder="0.00" ${da} data-f="unitCost"></td>`;
     /* Link control: the master shows a "★ Master A" chip; each follower shows a
        "🔗 A → F1" chip naming the master it's linked to. The group letter + colour
        (and the matching left stripe) tie members together; hovering any member
@@ -1626,21 +1637,21 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const linkAttr = grp ? ` data-link="${r.linkId}"` : '';
     return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${linkCls}${picking}"${stripeStyle}>
       ${selCell(r)}
-      <td style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-f="qty"></td>
-      <td style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
+      <td data-label="Qty" style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-f="qty"></td>
+      <td data-label="Type" style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
       ${tagCell}
-      <td style="width:120px"><input list="${allowAccessories?'memMfr':'ctrlMfr'}" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
-      <td style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
-      <td style="min-width:170px" class="col-desc">${txtField(r.desc, da, 'desc', 'Part description', {list:'memDesc'})}</td>
+      <td data-label="Mfr" style="width:120px"><input list="${allowAccessories?'memMfr':'ctrlMfr'}" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
+      <td data-label="Part #" style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
+      <td data-label="Description" style="min-width:170px" class="col-desc">${txtField(r.desc, da, 'desc', 'Part description', {list:'memDesc'})}</td>
       ${costCell}
-      <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(r)}" placeholder="1" title="Manufacturer multiplier (scales unit cost)" ${da} data-f="mfrMult"></td>
+      <td data-label="Mfr ×" style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(r)}" placeholder="1" title="Manufacturer multiplier (scales unit cost)" ${da} data-f="mfrMult"></td>
       ${mkCell(r.markup, da, 'col-markup')}
-      <td class="calc" style="width:88px">${money(c.unitSell)}</td>
-      <td class="calc" style="width:96px">${money(c.extCost)}</td>
-      <td class="calc sell" style="width:104px">${money(c.extSell)}</td>
-      <td class="col-source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
-      <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
-      <td style="width:110px" class="no-print row-actions">
+      <td class="calc" data-label="Unit sell" style="width:88px">${money(c.unitSell)}</td>
+      <td class="calc" data-label="Ext. cost" style="width:96px">${money(c.extCost)}</td>
+      <td class="calc sell" data-label="Ext. sell" style="width:104px">${money(c.extSell)}</td>
+      <td class="col-source" data-label="Price source" style="width:130px">${txtField(r.source||'', da, 'source', 'Price source / date', {})}</td>
+      <td class="col-notes" data-label="Notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
+      <td style="width:110px" class="no-print row-actions card-actions">
         ${selCol?'':`<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select for bulk edit (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">`}
         ${linkBtn}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
@@ -1665,21 +1676,21 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       const mInherit = (a.markup===null||a.markup==="");
       return `<tr class="acc-row">
         <td class="col-lead no-print"></td>
-        <td style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
-        <td style="width:78px"><span class="acc-pill">Acc</span></td>
-        <td class="col-tag" style="width:118px"></td>
-        <td style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
-        <td style="width:130px" class="col-part">${txtField(a.part, da, 'accpart', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:a.part})}</td>
-        <td style="min-width:170px" class="col-desc"><span class="acc-tag">${txtField(a.desc, da, 'accdesc', 'Accessory (louver, lens, filter…)', {list:'memDesc'})}</span></td>
-        <td style="width:88px"><input class="num" inputmode="decimal" value="${costVal(a.unitCost)}" placeholder="0.00" ${da} data-f="accunitCost"></td>
-        <td style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(a)}" placeholder="1" title="Manufacturer multiplier" ${da} data-f="accmfrMult"></td>
-        <td class="col-markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
-        <td class="calc" style="width:88px">${money(ac.unitSell)}</td>
-        <td class="calc" style="width:96px">${money(ac.extCost)}</td>
-        <td class="calc sell" style="width:104px">${money(ac.extSell)}</td>
-        <td class="col-source" style="width:130px">${txtField(a.source||'', da, 'accsource', 'Price source', {})}</td>
-        <td class="col-notes" style="width:150px">${txtField(a.note||'', da, 'accnote', 'Notes', {})}</td>
-        <td style="width:30px" class="no-print"><button class="rowdel" title="Delete accessory" onclick="delAccessory('${kind}',${i},${ai})">✕</button></td>
+        <td data-label="Qty" style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
+        <td data-label="Type" style="width:78px"><span class="acc-pill">Acc</span></td>
+        <td class="col-tag" data-label="Tag" style="width:118px"></td>
+        <td data-label="Mfr" style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
+        <td data-label="Part #" style="width:130px" class="col-part">${txtField(a.part, da, 'accpart', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:a.part})}</td>
+        <td data-label="Description" style="min-width:170px" class="col-desc"><span class="acc-tag">${txtField(a.desc, da, 'accdesc', 'Accessory (louver, lens, filter…)', {list:'memDesc'})}</span></td>
+        <td data-label="Unit cost" style="width:88px"><input class="num" inputmode="decimal" value="${costVal(a.unitCost)}" placeholder="0.00" ${da} data-f="accunitCost"></td>
+        <td data-label="Mfr ×" style="width:62px"><input class="num" inputmode="decimal" value="${mfrMultOf(a)}" placeholder="1" title="Manufacturer multiplier" ${da} data-f="accmfrMult"></td>
+        <td class="col-markup" data-label="Markup" style="width:78px"><input class="num${mInherit?' mk-inherit':''}" inputmode="decimal" value="${mInherit?'':pct2x(a.markup)}" placeholder="${pct2x(defMarkup)}" ${da} data-f="accmarkup"></td>
+        <td class="calc" data-label="Unit sell" style="width:88px">${money(ac.unitSell)}</td>
+        <td class="calc" data-label="Ext. cost" style="width:96px">${money(ac.extCost)}</td>
+        <td class="calc sell" data-label="Ext. sell" style="width:104px">${money(ac.extSell)}</td>
+        <td class="col-source" data-label="Price source" style="width:130px">${txtField(a.source||'', da, 'accsource', 'Price source', {})}</td>
+        <td class="col-notes" data-label="Notes" style="width:150px">${txtField(a.note||'', da, 'accnote', 'Notes', {})}</td>
+        <td style="width:30px" class="no-print card-actions"><button class="rowdel" title="Delete accessory" onclick="delAccessory('${kind}',${i},${ai})">✕</button></td>
       </tr>`;
     }).join("");
     const addRowHTML = `<tr class="acc-row no-print"><td class="acc-add-cell" colspan="${NCOLS}">

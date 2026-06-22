@@ -330,8 +330,12 @@
   .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;
     display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
   .modal{background:var(--sheet);border:2px solid var(--ink);min-width:320px;max-width:420px;
-    padding:24px 26px 20px;box-shadow:0 8px 32px rgba(0,0,0,.22)}
-  .modal h4{font-size:.95rem;font-weight:700;margin-bottom:8px;color:var(--ink)}
+    padding:24px 26px 20px;box-shadow:0 8px 32px rgba(0,0,0,.22);
+    display:flex;flex-direction:column;max-height:92vh;overflow:hidden}
+  .modal h4{font-size:.95rem;font-weight:700;margin-bottom:8px;color:var(--ink);flex:0 0 auto}
+  /* The body scrolls when content is tall so the header and buttons stay reachable */
+  .modal-body{flex:1 1 auto;overflow-y:auto;min-height:0}
+  .modal-btns{flex:0 0 auto}
   .modal p{font-size:.84rem;color:var(--ink-soft);margin-bottom:20px;line-height:1.5}
   .modal-btns{display:flex;gap:10px;justify-content:flex-end}
   .modal-btns button{min-width:80px}
@@ -835,11 +839,11 @@
 
     /* Modals fill the screen */
     .modal-backdrop{align-items:flex-end}
-    .modal{min-width:0;max-width:none;width:100%;max-height:90vh;overflow:auto;
+    .modal{min-width:0;max-width:none;width:100%;max-height:90vh;overflow:hidden;
       padding:18px 16px calc(18px + env(safe-area-inset-bottom));
       border-radius:14px 14px 0 0;border-width:0}
     .modal-wide,.modal-xwide{width:100%;max-width:none}
-    .modal-btns{position:sticky;bottom:0;background:var(--sheet);padding-top:10px}
+    .modal-btns{background:var(--sheet);padding-top:10px}
 
     /* Bigger hit areas for the tiny row controls */
     .rowdel,.rowact,.linkbtn,.sec-toggle,.acc-collapse-btn{min-width:34px;min-height:34px}
@@ -848,6 +852,62 @@
     .stamp-row.tax{flex-wrap:wrap;gap:4px}
     .stamp-row.tax .lbl{flex:1 1 auto;min-width:0}
     .stamp input{width:90px;font-size:16px;padding:4px 7px}
+  }
+
+  /* ===== Phone card view (each fixture/control as a stacked, labeled card) =====
+     Opt-in via Settings → “Card view on phones” (body.bom-cards), and only active
+     inside the phone breakpoint so wider screens keep the spreadsheet table. */
+  @media (max-width:760px){
+    body.bom-cards .section .table-scroll{overflow:visible}
+    body.bom-cards .bom-table{display:block;width:100%;border:0;table-layout:auto}
+    body.bom-cards .bom-table>colgroup,
+    body.bom-cards .bom-table>thead{display:none}
+    body.bom-cards .bom-table>tbody{display:block;width:100%}
+    body.bom-cards .bom-table tr{display:block}
+
+    /* Data rows become cards; accessory cards nest under their fixture */
+    body.bom-cards .bom-table tr[data-ri],
+    body.bom-cards .bom-table tr.acc-row{
+      border:1px solid var(--rule);border-radius:10px;background:var(--sheet);
+      margin:0 0 10px;padding:6px 11px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+    body.bom-cards .bom-table tr.acc-row{margin-left:16px;background:var(--amber-wash)}
+
+    /* Labeled cells: “LABEL  value” on one flex line */
+    body.bom-cards .bom-table td[data-label]{
+      display:flex;align-items:center;gap:10px;width:auto!important;
+      padding:5px 0;border-bottom:1px dashed var(--rule);text-align:left}
+    body.bom-cards .bom-table tr[data-ri] td[data-label]:last-of-type,
+    body.bom-cards .bom-table tr.acc-row td[data-label]:last-of-type{border-bottom:0}
+    body.bom-cards .bom-table td[data-label]::before{
+      content:attr(data-label);flex:0 0 88px;color:var(--ink-soft);
+      font:600 .68rem/1.3 var(--ui);text-transform:uppercase;letter-spacing:.05em}
+    body.bom-cards .bom-table td[data-label]>*{flex:1 1 auto;min-width:0}
+    body.bom-cards .bom-table td[data-label] input,
+    body.bom-cards .bom-table td[data-label] textarea{width:100%}
+    /* Calc cells carry a bare text value (no input) — keep it monospace + readable */
+    body.bom-cards .bom-table td.calc{font-family:var(--mono);justify-content:flex-start}
+    body.bom-cards .bom-table td.calc.sell{color:var(--sell);font-weight:700}
+
+    /* Drop the drag/select gutter and the always-empty accessory Tag line */
+    body.bom-cards .bom-table td.col-lead{display:none}
+    body.bom-cards .bom-table tr.acc-row td.col-tag{display:none}
+
+    /* Row buttons become a right-aligned footer strip */
+    body.bom-cards .bom-table td.card-actions{
+      display:flex;justify-content:flex-end;gap:6px;width:auto!important;
+      padding:8px 0 2px;border:0;text-align:right}
+    body.bom-cards .bom-table td.card-actions::before{content:none}
+
+    /* Full-width utility rows (section divider, accessory toggle, “+ add” bars)
+       stay as plain blocks — not cards */
+    body.bom-cards .bom-table tr.section-row,
+    body.bom-cards .bom-table tr.acc-toggle-row,
+    body.bom-cards .bom-table tr.acc-row.no-print{
+      border:0;background:transparent;box-shadow:none;margin:0;padding:0}
+    body.bom-cards .bom-table tr.acc-row.no-print,
+    body.bom-cards .bom-table tr.acc-toggle-row{margin-left:16px}
+    body.bom-cards .bom-table td[colspan]{display:block;width:auto!important;padding:6px 0}
+    body.bom-cards .bom-table td[colspan]::before{content:none}
   }
 
   /* ===== Version badge & update banner ===== */
