@@ -865,60 +865,98 @@
     .stamp input{width:90px;font-size:16px;padding:4px 7px}
   }
 
-  /* ===== Phone card view (each fixture/control as a stacked, labeled card) =====
-     Opt-in via Settings → “Card view on phones” (body.bom-cards), and only active
-     inside the phone breakpoint so wider screens keep the spreadsheet table. */
+  /* ===== Phone card view (fixtures, controls, services & shipping) =====
+     Opt-in via Settings → “Card view on phones” (body.bom-cards); only active in
+     the phone breakpoint so wider screens keep the spreadsheet tables. Each row
+     becomes a card and each cell a labeled, full-width field. */
   @media (max-width:760px){
-    body.bom-cards .section .table-scroll{overflow:visible}
-    body.bom-cards .bom-table{display:block;width:100%;border:0;table-layout:auto}
-    body.bom-cards .bom-table>colgroup,
-    body.bom-cards .bom-table>thead{display:none}
-    body.bom-cards .bom-table>tbody{display:block;width:100%}
-    body.bom-cards .bom-table tr{display:block}
+    body.bom-cards .table-scroll,
+    body.bom-cards .ship-scroll,
+    body.bom-cards .foraccess{overflow:visible}
 
-    /* Data rows become cards; accessory cards nest under their fixture */
+    /* Tear down the table grid so rows can stack */
+    body.bom-cards .bom-table,
+    body.bom-cards .svc-table,
+    body.bom-cards .ship-table{display:block;width:100%;border:0;table-layout:auto}
+    body.bom-cards .bom-table>colgroup,  body.bom-cards .bom-table>thead,
+    body.bom-cards .svc-table>colgroup,  body.bom-cards .svc-table>thead,
+    body.bom-cards .ship-table>colgroup, body.bom-cards .ship-table>thead{display:none}
+    body.bom-cards .bom-table>tbody,
+    body.bom-cards .svc-table>tbody,
+    body.bom-cards .ship-table>tbody{display:block;width:100%}
+    body.bom-cards .bom-table tr,
+    body.bom-cards .svc-table tr,
+    body.bom-cards .ship-table tr{display:block}
+
+    /* Data rows become cards */
     body.bom-cards .bom-table tr[data-ri],
-    body.bom-cards .bom-table tr.acc-row{
+    body.bom-cards .bom-table tr.acc-row,
+    body.bom-cards .svc-table tr[data-svc-r],
+    body.bom-cards .svc-table tr.acc-row,
+    body.bom-cards .ship-table tbody tr{
       border:1px solid var(--rule);border-radius:10px;background:var(--sheet);
       margin:0 0 10px;padding:6px 11px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
-    body.bom-cards .bom-table tr.acc-row{margin-left:16px;background:var(--amber-wash)}
+    /* Accessory / add-on cards nest under their parent line */
+    body.bom-cards .bom-table tr.acc-row,
+    body.bom-cards .svc-table tr.acc-row,
+    body.bom-cards .ship-table tr.acc-ship-row{margin-left:16px;background:var(--amber-wash)}
 
-    /* Labeled cells: “LABEL  value” on one flex line */
-    body.bom-cards .bom-table td[data-label]{
+    /* Each labeled cell: “LABEL  value” on one flex line */
+    body.bom-cards td[data-label]{
       display:flex;align-items:center;gap:10px;width:auto!important;
-      padding:5px 0;border-bottom:1px dashed var(--rule);text-align:left}
-    body.bom-cards .bom-table tr[data-ri] td[data-label]:last-of-type,
-    body.bom-cards .bom-table tr.acc-row td[data-label]:last-of-type{border-bottom:0}
-    body.bom-cards .bom-table td[data-label]::before{
-      content:attr(data-label);flex:0 0 88px;color:var(--ink-soft);
+      padding:5px 0;border:0;border-bottom:1px dashed var(--rule);text-align:left;white-space:normal}
+    body.bom-cards tr[data-ri] td[data-label]:last-of-type,
+    body.bom-cards tr[data-svc-r] td[data-label]:last-of-type,
+    body.bom-cards .acc-row td[data-label]:last-of-type,
+    body.bom-cards .ship-table tbody tr td[data-label]:last-of-type{border-bottom:0}
+    body.bom-cards td[data-label]::before{
+      content:attr(data-label);flex:0 0 92px;color:var(--ink-soft);
       font:600 .68rem/1.3 var(--ui);text-transform:uppercase;letter-spacing:.05em}
-    body.bom-cards .bom-table td[data-label]>*{flex:1 1 auto;min-width:0}
-    body.bom-cards .bom-table td[data-label] input,
-    body.bom-cards .bom-table td[data-label] textarea{width:100%}
-    /* Calc cells carry a bare text value (no input) — keep it monospace + readable */
-    body.bom-cards .bom-table td.calc{font-family:var(--mono);justify-content:flex-start}
-    body.bom-cards .bom-table td.calc.sell{color:var(--sell);font-weight:700}
+    body.bom-cards td[data-label]>*{flex:1 1 auto;min-width:0}
+    /* Every editable field becomes a clearly visible, left-aligned, full-width box
+       — this is what makes the qty / cost / markup numbers show on phones. */
+    body.bom-cards td[data-label] input,
+    body.bom-cards td[data-label] select,
+    body.bom-cards td[data-label] textarea{
+      width:100%;text-align:left;border:1px solid var(--rule-dark);border-radius:7px;
+      background:var(--paper);padding:8px 10px;color:var(--ink)}
+    body.bom-cards td[data-label] input:focus,
+    body.bom-cards td[data-label] select:focus,
+    body.bom-cards td[data-label] textarea:focus{background:var(--amber-wash);outline:none}
+    /* Calc / mirror cells carry bare text values — no box, just readable text */
+    body.bom-cards td.calc{font-family:var(--mono);justify-content:flex-start}
+    body.bom-cards td.calc.sell{color:var(--sell);font-weight:700}
+    body.bom-cards td.mirror{color:var(--ink)}
 
-    /* Drop the drag/select gutter and the always-empty accessory Tag line */
-    body.bom-cards .bom-table td.col-lead{display:none}
-    body.bom-cards .bom-table tr.acc-row td.col-tag{display:none}
+    /* Drop the drag/select gutters and always-empty cells */
+    body.bom-cards .bom-table td.col-lead,
+    body.bom-cards .svc-table td.col-lead,
+    body.bom-cards .ship-table td.chk{display:none}
+    body.bom-cards .acc-row td.col-tag{display:none}
 
-    /* Row buttons become a right-aligned footer strip */
-    body.bom-cards .bom-table td.card-actions{
-      display:flex;justify-content:flex-end;gap:6px;width:auto!important;
-      padding:8px 0 2px;border:0;text-align:right}
-    body.bom-cards .bom-table td.card-actions::before{content:none}
+    /* Row buttons → a clearly tappable footer strip (duplicate / delete / etc.) */
+    body.bom-cards td.card-actions{
+      display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;width:auto!important;
+      padding:9px 0 2px;border:0;border-top:1px solid var(--rule);margin-top:4px}
+    body.bom-cards td.card-actions::before{content:none}
+    body.bom-cards td.card-actions button{
+      border:1px solid var(--rule-dark);border-radius:8px;background:var(--paper);
+      min-height:40px;min-width:44px;padding:8px 12px;font-size:1rem;color:var(--ink)}
+    body.bom-cards td.card-actions .rowdel{color:var(--danger);border-color:var(--danger)}
 
-    /* Full-width utility rows (section divider, accessory toggle, “+ add” bars)
-       stay as plain blocks — not cards */
-    body.bom-cards .bom-table tr.section-row,
-    body.bom-cards .bom-table tr.acc-toggle-row,
-    body.bom-cards .bom-table tr.acc-row.no-print{
+    /* Full-width utility rows stay plain blocks — not cards */
+    body.bom-cards .section-row,
+    body.bom-cards .acc-toggle-row,
+    body.bom-cards .acc-row.no-print,
+    body.bom-cards .col-filter-row{
       border:0;background:transparent;box-shadow:none;margin:0;padding:0}
-    body.bom-cards .bom-table tr.acc-row.no-print,
-    body.bom-cards .bom-table tr.acc-toggle-row{margin-left:16px}
-    body.bom-cards .bom-table td[colspan]{display:block;width:auto!important;padding:6px 0}
-    body.bom-cards .bom-table td[colspan]::before{content:none}
+    body.bom-cards .acc-row.no-print,
+    body.bom-cards .acc-toggle-row{margin-left:16px}
+    body.bom-cards td[colspan]{display:block;width:auto!important;padding:6px 0}
+    body.bom-cards td[colspan]::before{content:none}
+
+    /* For-Access recap & totals: let very wide numbers scroll instead of clipping */
+    body.bom-cards .foraccess{overflow-x:auto}
   }
 
   /* ===== Version badge & update banner ===== */
@@ -1912,7 +1950,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.60.0";
+const APP_VERSION = "1.61.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3776,19 +3814,19 @@ function servicesTable(opt){
       const unitOpts = units.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('');
       const locOpts = SERVICE_LOCATIONS.map(l=>`<option ${s.location===l?'selected':''}>${l}</option>`).join('');
       /* Lump Sum lines (e.g. site manual) have no In-Office / On-Site location. */
-      const locCell = (s.unit==='Lump Sum') ? `<td></td>`
-        : `<td><select ${da} data-f="location">${locOpts}</select></td>`;
+      const locCell = (s.unit==='Lump Sum') ? `<td data-label="Location"></td>`
+        : `<td data-label="Location"><select ${da} data-f="location">${locOpts}</select></td>`;
       const lineRow = `<tr data-svc-g="${gi}" data-svc-r="${si}">
         <td class="col-lead no-print"><span class="svc-grip" title="Drag to reorder this line" data-svc-g="${gi}" data-svc-r="${si}">⠿</span></td>
-        <td><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
-        <td><select ${da} data-f="unit">${unitOpts}</select></td>
+        <td data-label="Qty"><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
+        <td data-label="Unit"><select ${da} data-f="unit">${unitOpts}</select></td>
         ${locCell}
-        <td><textarea class="svc-desc" rows="1" placeholder="Service description" ${da} data-f="desc">${esc(s.desc)}</textarea></td>
-        <td><input class="num" inputmode="decimal" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
-        <td class="calc sell">${money(c.extSell)}</td>
-        <td><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
-        <td><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
-        <td class="no-print row-actions">
+        <td data-label="Description"><textarea class="svc-desc" rows="1" placeholder="Service description" ${da} data-f="desc">${esc(s.desc)}</textarea></td>
+        <td data-label="Sell rate"><input class="num" inputmode="decimal" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
+        <td class="calc sell" data-label="Ext. sell">${money(c.extSell)}</td>
+        <td data-label="Source"><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
+        <td data-label="Notes"><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
+        <td class="no-print row-actions card-actions">
           <button class="rowact" tabindex="-1" title="Duplicate this service line" onclick="dupService(${gi},${si})">⎘</button>
           <button class="rowdel" tabindex="-1" title="Delete service line" onclick="delService(${gi},${si})">✕</button>
         </td>
@@ -3803,15 +3841,15 @@ function servicesTable(opt){
           const qInherit = (a.qty===null||a.qty==='');
           return `<tr class="acc-row">
             <td class="col-lead no-print"></td>
-            <td><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
-            <td><span class="acc-pill">Add</span></td>
-            <td></td>
-            <td><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Add-on" ${ada} data-f="addondesc"></span></td>
-            <td><input class="num" inputmode="decimal" value="${costVal(a.sellRate)}" placeholder="0.00" ${ada} data-f="addonsellRate"></td>
-            <td class="calc sell">${money(svcAddonSell(a,s))}</td>
-            <td><input value="${esc(a.source||'')}" placeholder="" ${ada} data-f="addonsource"></td>
-            <td><input value="${esc(a.note||'')}" placeholder="Notes" ${ada} data-f="addonnote"></td>
-            <td class="no-print"><button class="rowdel" title="Delete add-on" onclick="delServiceAddon(${gi},${si},${ai})">✕</button></td>
+            <td data-label="Qty"><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
+            <td data-label="Unit"><span class="acc-pill">Add</span></td>
+            <td class="col-tag"></td>
+            <td data-label="Description"><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Add-on" ${ada} data-f="addondesc"></span></td>
+            <td data-label="Sell rate"><input class="num" inputmode="decimal" value="${costVal(a.sellRate)}" placeholder="0.00" ${ada} data-f="addonsellRate"></td>
+            <td class="calc sell" data-label="Ext. sell">${money(svcAddonSell(a,s))}</td>
+            <td data-label="Source"><input value="${esc(a.source||'')}" placeholder="" ${ada} data-f="addonsource"></td>
+            <td data-label="Notes"><input value="${esc(a.note||'')}" placeholder="Notes" ${ada} data-f="addonnote"></td>
+            <td class="no-print card-actions"><button class="rowdel" title="Delete add-on" onclick="delServiceAddon(${gi},${si},${ai})">✕</button></td>
           </tr>`;
         }).join('');
         const key = `svc_${gi}_${si}`;
@@ -6014,12 +6052,40 @@ function renderShipping(){
     </div>`;
 
   el.innerHTML = dashboard + filterBar + table + assignBar + invoicesPanel() + shipSummary();
+  /* Card view on phones: copy column names from the live header onto each cell so
+     the stacked cards can show field labels (the shipping table's columns are
+     dynamic, so we label after render rather than hand-writing data-labels). */
+  applyShipCardLabels();
   /* restore focus to the column-filter input the user is typing in */
   if(_shipFilterFocus){
     const fi = document.querySelector('.col-filter-in[data-scf="'+_shipFilterFocus+'"]');
     if(fi){ fi.focus(); try{ const v=fi.value; fi.setSelectionRange(v.length,v.length); }catch(e){} }
     _shipFilterFocus = null;
   }
+}
+
+/* Label each shipping-table cell with its column name (read from the live <thead>,
+   minus the sort glyph) so the phone card view can show "LABEL value" per field.
+   Rows whose cell count doesn't match the header (none today, but section/colspan
+   rows if added later) are skipped. */
+function applyShipCardLabels(){
+  const table = document.querySelector('.ship-table');
+  if(!table || !table.tHead || !table.tHead.rows.length) return;
+  const ths = table.tHead.rows[0].cells;
+  const labels = Array.prototype.map.call(ths, th=>{
+    const c = th.cloneNode(true);
+    c.querySelectorAll('.sort-icon').forEach(s=>s.remove());
+    return (c.textContent||'').replace(/\s+/g,' ').trim();
+  });
+  Array.prototype.forEach.call(table.tBodies, tb=>{
+    Array.prototype.forEach.call(tb.rows, tr=>{
+      if(tr.cells.length !== ths.length) return;
+      for(let i=0;i<tr.cells.length;i++){
+        if(labels[i] && !tr.cells[i].hasAttribute('data-label'))
+          tr.cells[i].setAttribute('data-label', labels[i]);
+      }
+    });
+  });
 }
 
 /* Bulk edit: set several procurement/shipping fields at once on every selected

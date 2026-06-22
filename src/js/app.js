@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.60.0";
+const APP_VERSION = "1.61.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1875,19 +1875,19 @@ function servicesTable(opt){
       const unitOpts = units.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('');
       const locOpts = SERVICE_LOCATIONS.map(l=>`<option ${s.location===l?'selected':''}>${l}</option>`).join('');
       /* Lump Sum lines (e.g. site manual) have no In-Office / On-Site location. */
-      const locCell = (s.unit==='Lump Sum') ? `<td></td>`
-        : `<td><select ${da} data-f="location">${locOpts}</select></td>`;
+      const locCell = (s.unit==='Lump Sum') ? `<td data-label="Location"></td>`
+        : `<td data-label="Location"><select ${da} data-f="location">${locOpts}</select></td>`;
       const lineRow = `<tr data-svc-g="${gi}" data-svc-r="${si}">
         <td class="col-lead no-print"><span class="svc-grip" title="Drag to reorder this line" data-svc-g="${gi}" data-svc-r="${si}">⠿</span></td>
-        <td><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
-        <td><select ${da} data-f="unit">${unitOpts}</select></td>
+        <td data-label="Qty"><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
+        <td data-label="Unit"><select ${da} data-f="unit">${unitOpts}</select></td>
         ${locCell}
-        <td><textarea class="svc-desc" rows="1" placeholder="Service description" ${da} data-f="desc">${esc(s.desc)}</textarea></td>
-        <td><input class="num" inputmode="decimal" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
-        <td class="calc sell">${money(c.extSell)}</td>
-        <td><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
-        <td><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
-        <td class="no-print row-actions">
+        <td data-label="Description"><textarea class="svc-desc" rows="1" placeholder="Service description" ${da} data-f="desc">${esc(s.desc)}</textarea></td>
+        <td data-label="Sell rate"><input class="num" inputmode="decimal" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
+        <td class="calc sell" data-label="Ext. sell">${money(c.extSell)}</td>
+        <td data-label="Source"><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
+        <td data-label="Notes"><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
+        <td class="no-print row-actions card-actions">
           <button class="rowact" tabindex="-1" title="Duplicate this service line" onclick="dupService(${gi},${si})">⎘</button>
           <button class="rowdel" tabindex="-1" title="Delete service line" onclick="delService(${gi},${si})">✕</button>
         </td>
@@ -1902,15 +1902,15 @@ function servicesTable(opt){
           const qInherit = (a.qty===null||a.qty==='');
           return `<tr class="acc-row">
             <td class="col-lead no-print"></td>
-            <td><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
-            <td><span class="acc-pill">Add</span></td>
-            <td></td>
-            <td><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Add-on" ${ada} data-f="addondesc"></span></td>
-            <td><input class="num" inputmode="decimal" value="${costVal(a.sellRate)}" placeholder="0.00" ${ada} data-f="addonsellRate"></td>
-            <td class="calc sell">${money(svcAddonSell(a,s))}</td>
-            <td><input value="${esc(a.source||'')}" placeholder="" ${ada} data-f="addonsource"></td>
-            <td><input value="${esc(a.note||'')}" placeholder="Notes" ${ada} data-f="addonnote"></td>
-            <td class="no-print"><button class="rowdel" title="Delete add-on" onclick="delServiceAddon(${gi},${si},${ai})">✕</button></td>
+            <td data-label="Qty"><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
+            <td data-label="Unit"><span class="acc-pill">Add</span></td>
+            <td class="col-tag"></td>
+            <td data-label="Description"><span class="acc-tag"><input value="${esc(a.desc)}" placeholder="Add-on" ${ada} data-f="addondesc"></span></td>
+            <td data-label="Sell rate"><input class="num" inputmode="decimal" value="${costVal(a.sellRate)}" placeholder="0.00" ${ada} data-f="addonsellRate"></td>
+            <td class="calc sell" data-label="Ext. sell">${money(svcAddonSell(a,s))}</td>
+            <td data-label="Source"><input value="${esc(a.source||'')}" placeholder="" ${ada} data-f="addonsource"></td>
+            <td data-label="Notes"><input value="${esc(a.note||'')}" placeholder="Notes" ${ada} data-f="addonnote"></td>
+            <td class="no-print card-actions"><button class="rowdel" title="Delete add-on" onclick="delServiceAddon(${gi},${si},${ai})">✕</button></td>
           </tr>`;
         }).join('');
         const key = `svc_${gi}_${si}`;
@@ -4113,12 +4113,40 @@ function renderShipping(){
     </div>`;
 
   el.innerHTML = dashboard + filterBar + table + assignBar + invoicesPanel() + shipSummary();
+  /* Card view on phones: copy column names from the live header onto each cell so
+     the stacked cards can show field labels (the shipping table's columns are
+     dynamic, so we label after render rather than hand-writing data-labels). */
+  applyShipCardLabels();
   /* restore focus to the column-filter input the user is typing in */
   if(_shipFilterFocus){
     const fi = document.querySelector('.col-filter-in[data-scf="'+_shipFilterFocus+'"]');
     if(fi){ fi.focus(); try{ const v=fi.value; fi.setSelectionRange(v.length,v.length); }catch(e){} }
     _shipFilterFocus = null;
   }
+}
+
+/* Label each shipping-table cell with its column name (read from the live <thead>,
+   minus the sort glyph) so the phone card view can show "LABEL value" per field.
+   Rows whose cell count doesn't match the header (none today, but section/colspan
+   rows if added later) are skipped. */
+function applyShipCardLabels(){
+  const table = document.querySelector('.ship-table');
+  if(!table || !table.tHead || !table.tHead.rows.length) return;
+  const ths = table.tHead.rows[0].cells;
+  const labels = Array.prototype.map.call(ths, th=>{
+    const c = th.cloneNode(true);
+    c.querySelectorAll('.sort-icon').forEach(s=>s.remove());
+    return (c.textContent||'').replace(/\s+/g,' ').trim();
+  });
+  Array.prototype.forEach.call(table.tBodies, tb=>{
+    Array.prototype.forEach.call(tb.rows, tr=>{
+      if(tr.cells.length !== ths.length) return;
+      for(let i=0;i<tr.cells.length;i++){
+        if(labels[i] && !tr.cells[i].hasAttribute('data-label'))
+          tr.cells[i].setAttribute('data-label', labels[i]);
+      }
+    });
+  });
 }
 
 /* Bulk edit: set several procurement/shipping fields at once on every selected
