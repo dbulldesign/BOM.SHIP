@@ -1233,9 +1233,10 @@
   .bom-locked .rowact,
   .bom-locked .drag-grip,
   .bom-locked .svc-grip,
-  .bom-locked .col-resizer,
   .bom-locked .bulk-grp,
   .bom-locked .sec-markup{display:none !important}
+  /* Column width is a local display preference (not part of the approved BOM),
+     so drag-to-resize stays available even after an option is approved. */
   .bom-locked .section input:disabled,
   .bom-locked .section select:disabled,
   .bom-locked .section textarea:disabled,
