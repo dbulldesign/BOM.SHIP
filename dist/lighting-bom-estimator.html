@@ -1823,7 +1823,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.53.2";
+const APP_VERSION = "1.54.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2017,7 +2017,7 @@ function sectionRow(name){ return {id:uid(), isSection:true, name:name||"Section
 function blankService(opt){
   opt = opt||{};
   return {id:uid(), qty:0, unit:opt.unit||"Days", location:(opt.location!==undefined?opt.location:"In Office"),
-          desc:opt.desc||"", sellRate:(opt.sellRate!=null?opt.sellRate:0), note:"", addons:[]};
+          desc:opt.desc||"", sellRate:(opt.sellRate!=null?opt.sellRate:0), source:(opt.source||""), note:"", addons:(opt.addons||[])};
 }
 const SERVICE_UNITS_BASE  = ["Trips","Days","Lump Sum"];          // Supplier & Controls (no Hours)
 const SERVICE_UNITS_NINJA = ["Trips","Days","Hours","Lump Sum"];  // Ninja / Design keeps Hours
@@ -2099,18 +2099,62 @@ function blankServiceAddon(preset){
           qty:null /* null = inherit the parent line's qty */, source:(preset.source!=null?preset.source:""), note:""};
 }
 
-/* Default rows per group type. Trips sits above Days; Hours only for Ninja. */
+/* Default service rows per group type, matching the firm's BOM template
+   (Supplier Services / Controls Services blocks). Location is taken from the
+   In-Office / On-Site prefix and the prefix is dropped from the description,
+   since the app shows location in its own column. The Travel and Site-Visit
+   lines come pre-loaded with the standard add-ons (still editable via the
+   + Add travel item / + Add day item menus). */
+function svcLine(o, addons){
+  if(addons) o = {...o, addons: addons.map(a=>blankServiceAddon(a))};
+  return blankService(o);
+}
+const SVC_TRAVEL_ADDONS = [
+  {desc:"RT FLIGHT",                 sellRate:500, source:"DK est"},
+  {desc:"RT TRAVEL - NYC AIRPORT",   sellRate:75,  source:"DK est"},
+  {desc:"RT TRAVEL - SITE AIRPORT",  sellRate:75,  source:"DK est"},
+];
+const SVC_SITEVISIT_ADDONS = [
+  {desc:"HOTEL",                         sellRate:250, source:"DK est"},
+  {desc:"CAR RENTAL / RT TRAVEL - SITE", sellRate:75,  source:"DK est"},
+  {desc:"BREAKFAST",                     sellRate:10,  source:"DK est"},
+  {desc:"LUNCH",                         sellRate:20,  source:"DK est"},
+  {desc:"DINNER",                        sellRate:50,  source:"DK est"},
+];
 function defaultServiceRows(type){
-  const rows = [
+  if(type==='supplier'){
+    return [
+      svcLine({unit:"Days", location:"In Office", desc:"COORDINATION OF FIXTURE INSTALLATION & WIRING. TECH SUPPORT TO INSTALLERS.", sellRate:1000, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"In Office", desc:"CREATE FIXTURE SHOP DRAWINGS. REVIEW OF MANUFACTURER/MILLWORKER SHOPS, FIELD DIMENSIONS (BY OTHERS). LOW VOLTAGE TRANSFORMER/POWER SUPPLY LAYOUTS.", sellRate:1000, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"In Office", desc:"", sellRate:1000, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"On Site", desc:"KICK-OFF MEETING", sellRate:1500, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"On Site", desc:"COORDINATION OF FIXTURE INSTALLATION & WIRING. TECH SUPPORT TO INSTALLERS.", sellRate:1500, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"On Site", desc:"INSTALLATION MANAGEMENT/ASSISTANCE TO EC.", sellRate:1500, source:"KLS 2024"}),
+      svcLine({unit:"Lump Sum", location:"—", desc:"SITE MANUAL & CLOSE-OUT DOCUMENTS", sellRate:375, source:"KLS 2024"}),
+      svcLine({unit:"Trips", location:"—", desc:"TRAVEL EXPENSES TO AND FROM SITE (ROUND TRIP)", sellRate:0}, SVC_TRAVEL_ADDONS),
+      svcLine({unit:"Days", location:"—", desc:"SITE VISIT EXPENSES (HOTEL, FOOD, TRANSPORT)", sellRate:0}, SVC_SITEVISIT_ADDONS),
+    ];
+  }
+  if(type==='controls'){
+    return [
+      svcLine({unit:"Days", location:"In Office", desc:"PRESET DIMMING SYSTEM COORDINATION", sellRate:1000, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"In Office", desc:"PRESET DIMMING SYSTEM PROGRAMMING AND CONFIGURATION", sellRate:1000, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"In Office", desc:"COORDINATION OF EMERGENCY DIMMING REQUIREMENTS", sellRate:1000, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"On Site", desc:"PRE-WIRE", sellRate:1500, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"On Site", desc:"PROGRESS", sellRate:1500, source:"KLS 2024"}),
+      svcLine({unit:"Days", location:"On Site", desc:"COMMISSIONING, PROGRAMMING & CLIENT TRAINING", sellRate:1500, source:"KLS 2024"}),
+      svcLine({unit:"Trips", location:"—", desc:"TRAVEL EXPENSES TO AND FROM SITE (ROUND TRIP)", sellRate:0}, SVC_TRAVEL_ADDONS),
+      svcLine({unit:"Days", location:"—", desc:"SITE VISIT EXPENSES (HOTEL, FOOD, TRANSPORT)", sellRate:0}, SVC_SITEVISIT_ADDONS),
+    ];
+  }
+  /* Ninja / Design — unchanged for now (to be reworked from the template next). */
+  return [
     blankService({unit:"Trips", location:"—",        desc:"Travel",    sellRate:0}),
     blankService({unit:"Days",  location:"In Office", desc:"In office", sellRate:1500}),
     blankService({unit:"Days",  location:"On Site",   desc:"On site",   sellRate:2500}),
+    blankService({unit:"Hours", location:"In Office", desc:"In office", sellRate:150}),
+    blankService({unit:"Hours", location:"On Site",   desc:"On site",   sellRate:250}),
   ];
-  if(type==='ninja'){
-    rows.push(blankService({unit:"Hours", location:"In Office", desc:"In office", sellRate:150}));
-    rows.push(blankService({unit:"Hours", location:"On Site",   desc:"On site",   sellRate:250}));
-  }
-  return rows;
 }
 function blankServiceGroup(name, type){
   type = type||"supplier";
