@@ -924,19 +924,14 @@
   .col-resizer{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:7;user-select:none}
   .col-resizer:hover{background:var(--amber)}
   td.row-actions{position:relative}
-  .drag-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 3px;vertical-align:middle;user-select:none}
-  .drag-grip:hover{color:var(--amber-deep)}
-  .drag-grip:active{cursor:grabbing}
-  tr.dragging{opacity:.45}
-  tr.drag-over > td{box-shadow:inset 0 2px 0 0 var(--amber)}
-  tr.section-row.drag-over > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
-  /* Services pointer-drag (touch + mouse) */
-  .svc-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 4px;vertical-align:middle;
-    user-select:none;touch-action:none}
-  .svc-grip:hover{color:var(--amber-deep)}
-  .svc-grip:active{cursor:grabbing}
-  tr.svc-dragging{opacity:.45}
-  tr.svc-drop-target > td{box-shadow:inset 0 2px 0 0 var(--amber)}
+  /* Pointer-based row drag (touch + mouse) for fixtures/controls and services */
+  .drag-grip,.svc-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 4px;
+    vertical-align:middle;user-select:none;touch-action:none}
+  .drag-grip:hover,.svc-grip:hover{color:var(--amber-deep)}
+  .drag-grip:active,.svc-grip:active{cursor:grabbing}
+  tr.row-drag-src{opacity:.45}
+  tr.row-drop-target > td{box-shadow:inset 0 2px 0 0 var(--amber)}
+  tr.section-row.row-drop-target > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
   body.row-dragging{cursor:grabbing;user-select:none}
   /* a text column the user has resized fills its fixed width instead of auto-growing */
   td input.txt.fixedw{field-sizing:auto;width:100%;max-width:none}

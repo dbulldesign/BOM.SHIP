@@ -935,19 +935,14 @@
   .col-resizer{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:7;user-select:none}
   .col-resizer:hover{background:var(--amber)}
   td.row-actions{position:relative}
-  .drag-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 3px;vertical-align:middle;user-select:none}
-  .drag-grip:hover{color:var(--amber-deep)}
-  .drag-grip:active{cursor:grabbing}
-  tr.dragging{opacity:.45}
-  tr.drag-over > td{box-shadow:inset 0 2px 0 0 var(--amber)}
-  tr.section-row.drag-over > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
-  /* Services pointer-drag (touch + mouse) */
-  .svc-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 4px;vertical-align:middle;
-    user-select:none;touch-action:none}
-  .svc-grip:hover{color:var(--amber-deep)}
-  .svc-grip:active{cursor:grabbing}
-  tr.svc-dragging{opacity:.45}
-  tr.svc-drop-target > td{box-shadow:inset 0 2px 0 0 var(--amber)}
+  /* Pointer-based row drag (touch + mouse) for fixtures/controls and services */
+  .drag-grip,.svc-grip{display:inline-block;cursor:grab;color:#C0BCAE;font-size:.95rem;padding:0 4px;
+    vertical-align:middle;user-select:none;touch-action:none}
+  .drag-grip:hover,.svc-grip:hover{color:var(--amber-deep)}
+  .drag-grip:active,.svc-grip:active{cursor:grabbing}
+  tr.row-drag-src{opacity:.45}
+  tr.row-drop-target > td{box-shadow:inset 0 2px 0 0 var(--amber)}
+  tr.section-row.row-drop-target > td{box-shadow:inset 0 -2px 0 0 var(--amber)}
   body.row-dragging{cursor:grabbing;user-select:none}
   /* a text column the user has resized fills its fixed width instead of auto-growing */
   td input.txt.fixedw{field-sizing:auto;width:100%;max-width:none}
@@ -1843,7 +1838,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.56.0";
+const APP_VERSION = "1.57.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3472,7 +3467,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
       <td style="width:110px" class="no-print row-actions">
         ${selCol?'':`<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select for bulk edit (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">`}
-        <span class="drag-grip" draggable="true" title="Drag to move row">⠿</span>
+        <span class="drag-grip" title="Drag to move row (works on touch)">⠿</span>
         ${linkBtn}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
@@ -4611,8 +4606,7 @@ function onPaneKeydown(e){
   }
 }
 
-/* ===== Drag-to-resize columns + drag rows between/within sections ===== */
-let _dragSrc = null;   // {kind, i} of the row being dragged
+/* ===== Drag-to-resize columns (row drag is pointer-based; see onSvcDrag*) ===== */
 function bindTableInteractions(pane){
   /* Column resize: a thin handle on each header cell's right edge. */
   pane.querySelectorAll('.section thead th').forEach(th=>{
@@ -4641,33 +4635,8 @@ function bindTableInteractions(pane){
       document.addEventListener('mouseup', up);
     });
   });
-
-  /* Row drag-and-drop (grip = drag source; rows & section dividers = drop targets). */
-  pane.querySelectorAll('.drag-grip').forEach(grip=>{
-    grip.addEventListener('dragstart', e=>{
-      const tr = grip.closest('tr');
-      _dragSrc = { kind: tr.dataset.rk, i: +tr.dataset.ri };
-      try{ e.dataTransfer.setData('text/plain', String(_dragSrc.i)); e.dataTransfer.effectAllowed='move'; }catch(_){}
-      tr.classList.add('dragging');
-    });
-    grip.addEventListener('dragend', ()=>{ const tr=grip.closest('tr'); if(tr) tr.classList.remove('dragging'); _dragSrc=null; });
-  });
-  pane.querySelectorAll('tr[data-ri], tr[data-sec]').forEach(tr=>{
-    tr.addEventListener('dragover', e=>{
-      if(!_dragSrc || tr.dataset.rk!==_dragSrc.kind) return;
-      e.preventDefault(); tr.classList.add('drag-over');
-    });
-    tr.addEventListener('dragleave', ()=> tr.classList.remove('drag-over'));
-    tr.addEventListener('drop', e=>{
-      tr.classList.remove('drag-over');
-      if(!_dragSrc || tr.dataset.rk!==_dragSrc.kind) return;
-      e.preventDefault();
-      const from = _dragSrc.i;
-      const to = (tr.dataset.sec!==undefined) ? (+tr.dataset.sec + 1) : (+tr.dataset.ri);
-      _dragSrc = null;
-      moveRow(tr.dataset.rk, from, to);
-    });
-  });
+  /* Row drag is handled by the pointer-based drag (onSvcDrag*), which works on
+     touch as well as mouse — see bindPane. */
 }
 
 /* ================= Row / option actions ================= */
@@ -4738,40 +4707,52 @@ function moveServiceRow(gi, from, to){
   rows.splice(to,0,r);
   markDirty(); render();
 }
-/* Pointer-based row drag for the services table — works with touch (iOS) and mouse,
-   unlike native HTML5 drag-and-drop. The grip carries data-svc-g / data-svc-r. */
-let _svcDrag = null;
+/* Pointer-based row drag — works with touch (iOS) and mouse, unlike native HTML5
+   drag-and-drop. Handles both the fixtures/controls tables (grip .drag-grip; rows
+   carry data-rk/data-ri, section dividers data-sec) and the services table
+   (grip .svc-grip; rows carry data-svc-g/data-svc-r). */
+let _rowDrag = null;
 function onSvcDragStart(e){
-  const grip = e.target.closest && e.target.closest('.svc-grip');
+  const grip = e.target.closest && e.target.closest('.drag-grip, .svc-grip');
   if(!grip) return;
+  const tr = grip.closest('tr'); if(!tr) return;
+  if(tr.dataset.svcG!==undefined){
+    _rowDrag = { type:'svc', gi:+tr.dataset.svcG, from:+tr.dataset.svcR, to:+tr.dataset.svcR };
+  } else if(tr.dataset.rk!==undefined && tr.dataset.ri!==undefined){
+    _rowDrag = { type:'bom', kind:tr.dataset.rk, from:+tr.dataset.ri, to:+tr.dataset.ri };
+  } else return;
   e.preventDefault();
-  const tr = grip.closest('tr');
-  _svcDrag = { gi:+grip.dataset.svcG, from:+grip.dataset.svcR, to:+grip.dataset.svcR };
-  if(tr) tr.classList.add('svc-dragging');
+  tr.classList.add('row-drag-src');
   try{ grip.setPointerCapture(e.pointerId); }catch(_){}
   document.body.classList.add('row-dragging');
 }
 function onSvcDragMove(e){
-  if(!_svcDrag) return;
+  if(!_rowDrag) return;
   const el = document.elementFromPoint(e.clientX, e.clientY);
-  const tr = el && el.closest && el.closest('tr[data-svc-g="'+_svcDrag.gi+'"]');
-  if(tr && tr.dataset.svcR!==undefined){
-    const ti = +tr.dataset.svcR;
-    if(ti!==_svcDrag.to){
-      _svcDrag.to = ti;
-      const pane = document.getElementById('pane');
-      if(pane){ pane.querySelectorAll('.svc-drop-target').forEach(x=>x.classList.remove('svc-drop-target')); tr.classList.add('svc-drop-target'); }
+  if(!el || !el.closest) return;
+  const pane = document.getElementById('pane'); if(!pane) return;
+  const clear = ()=> pane.querySelectorAll('.row-drop-target').forEach(x=>x.classList.remove('row-drop-target'));
+  if(_rowDrag.type==='svc'){
+    const tr = el.closest('tr[data-svc-g="'+_rowDrag.gi+'"]');
+    if(tr && tr.dataset.svcR!==undefined){ const ti=+tr.dataset.svcR; if(ti!==_rowDrag.to){ _rowDrag.to=ti; clear(); tr.classList.add('row-drop-target'); } }
+  } else {
+    const tr = el.closest('tr[data-rk="'+_rowDrag.kind+'"]');
+    if(tr){
+      const to = (tr.dataset.sec!==undefined) ? (+tr.dataset.sec+1)
+               : (tr.dataset.ri!==undefined ? +tr.dataset.ri : undefined);
+      if(to!==undefined && to!==_rowDrag.to){ _rowDrag.to=to; clear(); tr.classList.add('row-drop-target'); }
     }
   }
 }
 function onSvcDragEnd(){
-  if(!_svcDrag) return;
-  const {gi, from, to} = _svcDrag;
-  _svcDrag = null;
+  if(!_rowDrag) return;
+  const d = _rowDrag; _rowDrag = null;
   document.body.classList.remove('row-dragging');
   const pane = document.getElementById('pane');
-  if(pane) pane.querySelectorAll('.svc-dragging,.svc-drop-target').forEach(x=>x.classList.remove('svc-dragging','svc-drop-target'));
-  if(from!==to) moveServiceRow(gi, from, to);
+  if(pane) pane.querySelectorAll('.row-drag-src,.row-drop-target').forEach(x=>x.classList.remove('row-drag-src','row-drop-target'));
+  if(d.from===d.to) return;
+  if(d.type==='svc') moveServiceRow(d.gi, d.from, d.to);
+  else moveRow(d.kind, d.from, d.to);
 }
 function dupService(gi,si){
   const rows = ensureServices()[gi].rows;
