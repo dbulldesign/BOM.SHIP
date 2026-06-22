@@ -1004,6 +1004,19 @@
   body.dark .ver-badge{color:#9aa4b2;border-color:#33404f}
   body.dark .ver-badge:hover{color:#7fb0ff;border-color:#7fb0ff}
 
+  /* Connection status: green dot = online, amber dot = offline */
+  .net-badge{display:inline-flex;align-items:center;gap:6px;margin-left:8px;vertical-align:middle;
+    font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;color:var(--ink-soft);
+    border:1px solid var(--rule-dark);border-radius:999px;padding:3px 9px;user-select:none}
+  .net-badge .net-dot{width:8px;height:8px;border-radius:50%;background:#2e9e5b;flex:0 0 auto;
+    box-shadow:0 0 0 3px rgba(46,158,91,.18)}
+  .net-badge.offline{color:#9a6a12;border-color:#caa24a}
+  .net-badge.offline .net-dot{background:#e0b020;box-shadow:0 0 0 3px rgba(224,176,32,.2)}
+  body.dark .net-badge{border-color:#33404f}
+  body.dark .net-badge .net-dot{background:#41c177}
+  body.dark .net-badge.offline{color:#e0b84a;border-color:#5a4a1e}
+  body.dark .net-badge.offline .net-dot{background:#e8b93a}
+
   .update-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
     background:#103a78;color:#eaf1ff;padding:10px 16px;font-size:13.5px;
     border-bottom:1px solid #0c2c5c}
@@ -1455,6 +1468,7 @@
   <h1>Lighting BOM Estimator</h1>
   <span class="sub">Fixtures · Controls · Options</span>
   <button class="ver-badge no-print" id="verBadge" onclick="checkForUpdates(true)" title="Click to check for a newer version">v0.0.0</button>
+  <span class="net-badge no-print" id="netBadge" title="Internet connection status"><span class="net-dot"></span><span class="net-label">Online</span></span>
   <div class="viewswitch no-print" id="viewSwitch">
     <button class="vs-btn active" id="vsEstimate" onclick="setView('estimate')">Estimate</button>
     <button class="vs-btn" id="vsShipping" onclick="setView('shipping')">Procurement &amp; Shipping</button>
@@ -1986,7 +2000,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.62.1";
+const APP_VERSION = "1.63.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2085,6 +2099,22 @@ function startGuidedUpdate(){
   // self-updates). Never blocks offline use.
   if(navigator.onLine && location.protocol==='file:') setTimeout(()=>checkForUpdates(false),1500);
 })();
+
+/* ================= Connection status indicator =================
+   Green dot = online, amber dot = offline. Driven by the browser's online/
+   offline events (and navigator.onLine on load). The app is fully offline-
+   capable, so this is purely informational. */
+function updateNetStatus(){
+  const el = document.getElementById('netBadge'); if(!el) return;
+  const online = navigator.onLine !== false;
+  el.classList.toggle('offline', !online);
+  const dot = el.querySelector('.net-dot'), label = el.querySelector('.net-label');
+  if(label) label.textContent = online ? 'Online' : 'Offline';
+  el.title = online ? 'Connected to the internet' : 'No internet connection — the app still works offline';
+}
+window.addEventListener('online',  updateNetStatus);
+window.addEventListener('offline', updateNetStatus);
+updateNetStatus();
 
 /* ================= Theme ================= */
 function applyTheme(dark){

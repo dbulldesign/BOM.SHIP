@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.62.1";
+const APP_VERSION = "1.63.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -110,6 +110,22 @@ function startGuidedUpdate(){
   // self-updates). Never blocks offline use.
   if(navigator.onLine && location.protocol==='file:') setTimeout(()=>checkForUpdates(false),1500);
 })();
+
+/* ================= Connection status indicator =================
+   Green dot = online, amber dot = offline. Driven by the browser's online/
+   offline events (and navigator.onLine on load). The app is fully offline-
+   capable, so this is purely informational. */
+function updateNetStatus(){
+  const el = document.getElementById('netBadge'); if(!el) return;
+  const online = navigator.onLine !== false;
+  el.classList.toggle('offline', !online);
+  const dot = el.querySelector('.net-dot'), label = el.querySelector('.net-label');
+  if(label) label.textContent = online ? 'Online' : 'Offline';
+  el.title = online ? 'Connected to the internet' : 'No internet connection — the app still works offline';
+}
+window.addEventListener('online',  updateNetStatus);
+window.addEventListener('offline', updateNetStatus);
+updateNetStatus();
 
 /* ================= Theme ================= */
 function applyTheme(dark){
