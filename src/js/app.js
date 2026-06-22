@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.61.3";
+const APP_VERSION = "1.62.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1009,6 +1009,10 @@ function colKeyForField(field){
 /* ================= UI state: collapse + settings ================= */
 const accExpanded = new Set();    // fixture row ids whose accessories are shown (default: hidden)
 const secCollapsed = new Set();   // section divider ids that are collapsed
+const cardExpanded = new Set();   // row ids whose phone card is open for editing (default: collapsed synopsis)
+/* Phone card view shows a compact synopsis per row with an Edit toggle; this
+   opens/closes the full labeled fields for that one row. No-op on desktop. */
+function toggleCardEdit(id){ if(cardExpanded.has(id)) cardExpanded.delete(id); else cardExpanded.add(id); render(); }
 const bomSel = new Set();         // selected fixture/control row ids (bulk edit)
 function toggleBomSel(id, on){ if(on) bomSel.add(id); else bomSel.delete(id); render(); }
 let _lastBomClickId = null;   // anchor for Shift-click range selection
@@ -1635,7 +1639,15 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     }
     const stripeStyle = grp ? ` style="--lg:${grp.color}"` : '';
     const linkAttr = grp ? ` data-link="${r.linkId}"` : '';
-    return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${linkCls}${picking}"${stripeStyle}>
+    /* Phone card view: a compact synopsis + Edit/Done toggle (collapsed by default) */
+    const expanded = cardExpanded.has(r.id);
+    const summaryCell = `<td class="card-summary no-print" colspan="${NCOLS}">
+      <div class="cs-text"><span class="cs-type">${esc(r.type||'—')}</span><span class="cs-desc">${esc(r.desc||'(no description)')}</span></div>
+      <div class="cs-fig">${qtyVal(r.qty)||0} × ${money(c.unitSell)} <b>${money(c.extSell)}</b></div>
+      <button class="cs-edit" onclick="toggleCardEdit('${r.id}')">${expanded?'Done ▾':'Edit ▸'}</button>
+    </td>`;
+    return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${linkCls}${picking}${expanded?' card-open':' card-collapsed'}"${stripeStyle}>
+      ${summaryCell}
       ${selCell(r)}
       <td data-label="Qty" style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-f="qty"></td>
       <td data-label="Type" style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
@@ -1877,7 +1889,14 @@ function servicesTable(opt){
       /* Lump Sum lines (e.g. site manual) have no In-Office / On-Site location. */
       const locCell = (s.unit==='Lump Sum') ? `<td data-label="Location"></td>`
         : `<td data-label="Location"><select ${da} data-f="location">${locOpts}</select></td>`;
-      const lineRow = `<tr data-svc-g="${gi}" data-svc-r="${si}">
+      const sExpanded = cardExpanded.has(s.id);
+      const sSummary = `<td class="card-summary no-print" colspan="${NC}">
+        <div class="cs-text"><span class="cs-type">${esc(s.unit)}</span><span class="cs-desc">${esc(s.desc||'(no description)')}</span></div>
+        <div class="cs-fig">${qtyVal(s.qty)||0} × ${money(s.sellRate)} <b>${money(c.extSell)}</b></div>
+        <button class="cs-edit" onclick="toggleCardEdit('${s.id}')">${sExpanded?'Done ▾':'Edit ▸'}</button>
+      </td>`;
+      const lineRow = `<tr data-svc-g="${gi}" data-svc-r="${si}" class="${sExpanded?'card-open':'card-collapsed'}">
+        ${sSummary}
         <td class="col-lead no-print"><span class="svc-grip" title="Drag to reorder this line" data-svc-g="${gi}" data-svc-r="${si}">⠿</span></td>
         <td data-label="Qty"><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
         <td data-label="Unit"><select ${da} data-f="unit">${unitOpts}</select></td>

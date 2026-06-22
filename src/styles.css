@@ -854,6 +854,9 @@
     .stamp input{width:90px;font-size:16px;padding:4px 7px}
   }
 
+  /* The condensed-card synopsis cell is phone-only; hidden everywhere else */
+  .card-summary{display:none}
+
   /* ===== Phone card view (fixtures, controls, services & shipping) =====
      Opt-in via Settings → “Card view on phones” (body.bom-cards); only active in
      the phone breakpoint so wider screens keep the spreadsheet tables. Each row
@@ -954,6 +957,31 @@
 
     /* For-Access recap & totals: let very wide numbers scroll instead of clipping */
     body.bom-cards .foraccess{overflow-x:auto}
+
+    /* ----- Condensed cards: synopsis row + Edit/Done toggle ----- */
+    body.bom-cards td.card-summary{
+      display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:12px;
+      width:auto!important;padding:2px 0}
+    body.bom-cards td.card-summary::before{content:none}
+    body.bom-cards .cs-text{grid-column:1;grid-row:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+    body.bom-cards .cs-type{font-weight:700;color:var(--ink);font-size:.92rem;flex:0 0 auto}
+    body.bom-cards .cs-desc{color:var(--ink-soft);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+    body.bom-cards .cs-fig{grid-column:1;grid-row:2;font-family:var(--mono);font-size:.8rem;color:var(--ink-soft);margin-top:3px}
+    body.bom-cards .cs-fig b{color:var(--sell);margin-left:4px}
+    body.bom-cards .cs-edit{grid-column:2;grid-row:1/3;align-self:center;white-space:nowrap;
+      border:1px solid var(--rule-dark);border-radius:8px;background:var(--paper);
+      color:var(--amber-deep);font-weight:600;min-height:40px;padding:8px 16px}
+    /* Collapsed (default): show only the synopsis; hide the full fields & actions */
+    body.bom-cards tr.card-collapsed td[data-label],
+    body.bom-cards tr.card-collapsed td.card-actions{display:none}
+    body.bom-cards tr.card-open{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+
+    /* ----- Section header on phones: let the title shrink and drop the
+       Cost/Sell figures onto their own line instead of cramming the corner ----- */
+    .section-cell{flex-wrap:wrap;row-gap:4px}
+    .section-cell>input{flex:1 1 140px;width:auto;min-width:0}
+    .section-sub{order:1;flex-basis:100%;margin-left:0;justify-content:flex-start;
+      gap:14px;padding-right:0}
   }
 
   /* ===== Version badge & update banner ===== */
