@@ -512,6 +512,14 @@
   .bom-table{table-layout:fixed;width:max-content}
   .bom-table td .txt{field-sizing:fixed!important;width:100%!important;min-width:0!important;max-width:none!important}
   .bom-table td input.txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* Services table: fixed layout so the Description column has a bounded width and
+     its textarea wraps (grows in height) instead of running off one line. */
+  .svc-table{table-layout:fixed}
+  .svc-table td .svc-desc{width:100%;border:none;background:transparent;font:inherit;font-size:.84rem;
+    color:var(--ink);resize:none;white-space:pre-wrap;word-break:break-word;overflow:hidden;
+    line-height:1.35;padding:7px 8px;field-sizing:content;min-height:1.6em}
+  .svc-table td .svc-desc:focus{outline:none;background:var(--amber-wash)}
+  body.dark .svc-table td .svc-desc:focus{background:#2A2310}
   /* sticky headers: keep column titles visible when scrolling long BOMs */
   .section thead th{position:sticky;top:0;z-index:3}
   @media print{ .section thead th{position:static} }
@@ -1823,7 +1831,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.54.0";
+const APP_VERSION = "1.55.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2017,7 +2025,8 @@ function sectionRow(name){ return {id:uid(), isSection:true, name:name||"Section
 function blankService(opt){
   opt = opt||{};
   return {id:uid(), qty:0, unit:opt.unit||"Days", location:(opt.location!==undefined?opt.location:"In Office"),
-          desc:opt.desc||"", sellRate:(opt.sellRate!=null?opt.sellRate:0), source:(opt.source||""), note:"", addons:(opt.addons||[])};
+          desc:opt.desc||"", sellRate:(opt.sellRate!=null?opt.sellRate:0), source:(opt.source||""), note:"",
+          allowAddons:!!opt.allowAddons, addons:(opt.addons||[])};
 }
 const SERVICE_UNITS_BASE  = ["Trips","Days","Lump Sum"];          // Supplier & Controls (no Hours)
 const SERVICE_UNITS_NINJA = ["Trips","Days","Hours","Lump Sum"];  // Ninja / Design keeps Hours
@@ -2106,7 +2115,9 @@ function blankServiceAddon(preset){
    lines come pre-loaded with the standard add-ons (still editable via the
    + Add travel item / + Add day item menus). */
 function svcLine(o, addons){
-  if(addons) o = {...o, addons: addons.map(a=>blankServiceAddon(a))};
+  /* Only Travel / Site-Visit lines (the ones we hand add-ons) get the
+     "+ Add travel/day item" menu — allowAddons gates it. */
+  if(addons) o = {...o, allowAddons:true, addons: addons.map(a=>blankServiceAddon(a))};
   return blankService(o);
 }
 const SVC_TRAVEL_ADDONS = [
@@ -2147,13 +2158,15 @@ function defaultServiceRows(type){
       svcLine({unit:"Days", location:"—", desc:"SITE VISIT EXPENSES (HOTEL, FOOD, TRANSPORT)", sellRate:0}, SVC_SITEVISIT_ADDONS),
     ];
   }
-  /* Ninja / Design — unchanged for now (to be reworked from the template next). */
+  /* Ninja / Design — Days then Hours (in-office / on-site), then the standard
+     Travel and Site-Visit add-on lines. */
   return [
-    blankService({unit:"Trips", location:"—",        desc:"Travel",    sellRate:0}),
-    blankService({unit:"Days",  location:"In Office", desc:"In office", sellRate:1500}),
-    blankService({unit:"Days",  location:"On Site",   desc:"On site",   sellRate:2500}),
-    blankService({unit:"Hours", location:"In Office", desc:"In office", sellRate:150}),
-    blankService({unit:"Hours", location:"On Site",   desc:"On site",   sellRate:250}),
+    svcLine({unit:"Days",  location:"In Office", desc:"", sellRate:1500}),
+    svcLine({unit:"Days",  location:"On Site",   desc:"", sellRate:2500}),
+    svcLine({unit:"Hours", location:"In Office", desc:"", sellRate:150}),
+    svcLine({unit:"Hours", location:"On Site",   desc:"", sellRate:250}),
+    svcLine({unit:"Trips", location:"—", desc:"TRAVEL EXPENSES TO AND FROM SITE (ROUND TRIP)", sellRate:0}, SVC_TRAVEL_ADDONS),
+    svcLine({unit:"Days",  location:"—", desc:"SITE VISIT EXPENSES (HOTEL, FOOD, TRANSPORT)", sellRate:0}, SVC_SITEVISIT_ADDONS),
   ];
 }
 function blankServiceGroup(name, type){
@@ -3669,22 +3682,26 @@ function servicesTable(opt){
       const da = `data-svc-g="${gi}" data-svc-r="${si}"`;
       const unitOpts = units.map(u=>`<option ${s.unit===u?'selected':''}>${u}</option>`).join('');
       const locOpts = SERVICE_LOCATIONS.map(l=>`<option ${s.location===l?'selected':''}>${l}</option>`).join('');
+      /* Lump Sum lines (e.g. site manual) have no In-Office / On-Site location. */
+      const locCell = (s.unit==='Lump Sum') ? `<td></td>`
+        : `<td><select ${da} data-f="location">${locOpts}</select></td>`;
       const lineRow = `<tr>
-        <td style="width:60px"><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
-        <td style="width:90px"><select ${da} data-f="unit">${unitOpts}</select></td>
-        <td style="width:104px"><select ${da} data-f="location">${locOpts}</select></td>
-        <td style="min-width:190px"><input value="${esc(s.desc)}" placeholder="Service description" ${da} data-f="desc"></td>
-        <td style="width:104px"><input class="num" inputmode="decimal" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
-        <td class="calc sell" style="width:110px">${money(c.extSell)}</td>
-        <td style="width:120px"><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
-        <td style="min-width:140px"><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
-        <td style="width:52px" class="no-print row-actions">
+        <td><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
+        <td><select ${da} data-f="unit">${unitOpts}</select></td>
+        ${locCell}
+        <td><textarea class="svc-desc" rows="1" placeholder="Service description" ${da} data-f="desc">${esc(s.desc)}</textarea></td>
+        <td><input class="num" inputmode="decimal" value="${costVal(s.sellRate)}" placeholder="0.00" ${da} data-f="sellRate"></td>
+        <td class="calc sell">${money(c.extSell)}</td>
+        <td><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
+        <td><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
+        <td class="no-print row-actions">
           <button class="rowact" tabindex="-1" title="Duplicate this service line" onclick="dupService(${gi},${si})">⎘</button>
           <button class="rowdel" tabindex="-1" title="Delete service line" onclick="delService(${gi},${si})">✕</button>
         </td>
       </tr>`;
-      /* Days & Trips lines carry accessory-style add-ons (travel, hotel, meals…). */
-      const presets = addonsForUnit(s.unit);
+      /* Only Travel / Site-Visit lines (allowAddons) carry the add-on menu. */
+      const allowAddons = !!s.allowAddons || (s.addons && s.addons.length>0);
+      const presets = allowAddons ? addonsForUnit(s.unit) : null;
       let addonsHTML = '';
       if(presets){
         const arows = (s.addons||[]).map((a,ai)=>{
@@ -3736,7 +3753,12 @@ function servicesTable(opt){
       <button class="ghost" onclick="addServiceGroup()">+ Add services group</button>
     </div>
     <div class="table-scroll">
-    <table>
+    <table class="svc-table">
+      <colgroup>
+        <col style="width:60px"><col style="width:92px"><col style="width:104px">
+        <col><col style="width:104px"><col style="width:110px">
+        <col style="width:120px"><col style="width:150px"><col class="no-print" style="width:52px">
+      </colgroup>
       <thead><tr>
         <th class="r">Qty</th><th>Unit</th><th>Location</th><th>Description</th>
         <th class="r">Sell rate</th><th class="r">Ext. sell</th>
@@ -7289,6 +7311,7 @@ function normService(s){
     location: SERVICE_LOCATIONS.includes(s.location)? s.location : 'In Office',
     desc:String(s.desc??""), sellRate,
     source:String(s.source??""), note:String(s.note??""),
+    allowAddons: !!s.allowAddons || (Array.isArray(s.addons) && s.addons.length>0),
     addons: Array.isArray(s.addons)? s.addons.map(normServiceAddon) : [] };
 }
 function normChangeOrder(co){
