@@ -575,6 +575,15 @@
   body.dark .section-cell input:focus{background:#3A2F12}
   .section-sub{margin-left:auto;font-family:var(--mono);font-size:.76rem;color:var(--ink-soft);padding-right:6px;display:flex;gap:16px}
   .section-sub b{color:var(--sell)}
+  .section-cell .rowact{font-size:.68rem;padding:2px 7px;white-space:nowrap;color:var(--ink-soft)}
+  /* Services template manager */
+  .tpl-list{display:flex;flex-direction:column;gap:8px}
+  .tpl-item{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    border:1px solid var(--rule);border-radius:8px;padding:8px 10px;background:var(--sheet)}
+  .tpl-meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .tpl-meta b{font-size:.85rem;color:var(--ink)}
+  .tpl-meta .paste-help{margin:0;font-size:.72rem}
+  .tpl-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
 
   /* ---- Accessory rows ---- */
   tr.acc-row td{background:#FAFAF7;border-bottom:1px dotted var(--rule)}

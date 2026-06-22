@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.58.0";
+const APP_VERSION = "1.59.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1919,6 +1919,7 @@ function servicesTable(opt){
         <span class="sx">▸ SERVICES</span>
         <input value="${esc(g.name)}" placeholder="Services group" data-svc-gname="${gi}">
         <span class="section-sub">Sell <b>${money(gTot.sell)}</b></span>
+        <button class="rowact no-print" title="Save this group as a reusable template" onclick="saveServiceGroupAsTemplate(${gi})">★ Save as template</button>
         <button class="rowdel no-print" title="Delete services group" onclick="delServiceGroup(${gi})">✕</button>
       </div></td></tr>
       ${rowsHTML}
@@ -1933,7 +1934,10 @@ function servicesTable(opt){
       <span class="sec-markup no-print" style="font-size:.7rem;color:var(--ink-soft)">Sell-only · no cost</span>
     </div>
     <div class="sec-add-bar no-print">
-      <button class="ghost" onclick="addServiceGroup()">+ Add services group</button>
+      <button class="ghost" onclick="addServiceGroup('supplier')">+ Supplier services</button>
+      <button class="ghost" onclick="addServiceGroup('controls')">+ Controls services</button>
+      <button class="ghost" onclick="addServiceGroup('ninja')">+ Ninja services</button>
+      <button class="ghost" onclick="openServiceTemplates()">★ Templates…</button>
     </div>
     <div class="table-scroll">
     <table class="svc-table">
@@ -2872,8 +2876,60 @@ document.addEventListener('click', e=>{ if(!e.target.closest('.acc-menu')) close
 
 /* ---- Services actions ---- */
 function ensureServices(){ const o=state.options[state.current]; if(!o.services) o.services=[]; return o.services; }
-function addServiceGroup(){ ensureServices().push({id:uid(), name:"Services", type:"ninja", rows:[blankService()]}); markDirty(); render(); }
+function addServiceGroup(type){
+  type = ['supplier','controls','ninja'].includes(type) ? type : 'supplier';
+  const name = type==='supplier' ? 'Supplier Services'
+             : type==='controls' ? 'Controls Services'
+             : 'Ninja / Design Services';
+  ensureServices().push(blankServiceGroup(name, type)); markDirty(); render();
+}
 function delServiceGroup(gi){ ensureServices().splice(gi,1); markDirty(); render(); }
+
+/* ----- Service group templates (saved on this computer, shared across jobs) ----- */
+const SVC_TPL_KEY = 'lbom_svc_templates_v1';
+function loadSvcTemplates(){ try{ const v=JSON.parse(localStorage.getItem(SVC_TPL_KEY)); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+function saveSvcTemplates(a){ try{ localStorage.setItem(SVC_TPL_KEY, JSON.stringify(a)); }catch(e){} }
+/* Snapshot a services group (name/type/rows, ids stripped) under a name. */
+function saveServiceGroupAsTemplate(gi){
+  const g = ensureServices()[gi]; if(!g) return;
+  openModal({ title:'Save services template', wide:false, confirmLabel:'Save', cancelLabel:'Cancel',
+    bodyHTML:`<p class="paste-help">Save this services group (lines, rates and add-ons) as a reusable template. Templates live on this computer and can be inserted into any job.</p>
+      <input id="svcTplName" class="lib-search" placeholder="Template name (e.g. Standard Ninja Package)" value="${esc(g.name||'')}" autocomplete="off">`,
+    onOpen(back){ const i=back.querySelector('#svcTplName'); if(i){ i.focus(); i.select(); i.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const n=i.value.trim(); if(n){ closeModal(); _commitSvcTemplate(gi,n); } } }); } },
+    onConfirm(back){ const i=back.querySelector('#svcTplName'); const n=i?i.value.trim():''; if(!n){ toast('Enter a name'); return; } closeModal(); _commitSvcTemplate(gi,n); }
+  });
+}
+function _commitSvcTemplate(gi, name){
+  const g = ensureServices()[gi]; if(!g) return;
+  const snap = JSON.parse(JSON.stringify({ name:g.name, type:g.type, rows:g.rows }));
+  const arr = loadSvcTemplates().filter(t=>t.name!==name);
+  arr.push({ id:uid(), name, group:snap });
+  saveSvcTemplates(arr);
+  toast('Saved template “'+name+'”');
+}
+/* Insert a saved template as a new services group in the current option. */
+function insertSvcTemplate(tid){
+  const t = loadSvcTemplates().find(x=>x.id===tid); if(!t) return;
+  const g = normServiceGroup(JSON.parse(JSON.stringify(t.group)));
+  g.id = uid(); (g.rows||[]).forEach(r=>{ r.id=uid(); (r.addons||[]).forEach(a=>a.id=uid()); });
+  ensureServices().push(g); markDirty(); closeModal(); render();
+}
+function delSvcTemplate(tid){ saveSvcTemplates(loadSvcTemplates().filter(t=>t.id!==tid)); openServiceTemplates(); }
+function openServiceTemplates(){
+  const tpls = loadSvcTemplates();
+  const list = tpls.length ? tpls.map(t=>{
+    const n = (t.group&&Array.isArray(t.group.rows))? t.group.rows.length : 0;
+    return `<div class="tpl-item">
+        <div class="tpl-meta"><b>${esc(t.name)}</b><span class="paste-help">${n} line${n===1?'':'s'} · ${esc(t.group&&t.group.type||'supplier')}</span></div>
+        <div class="tpl-actions">
+          <button class="ghost" onclick="insertSvcTemplate('${t.id}')">Insert</button>
+          <button class="rowdel" title="Delete template" onclick="delSvcTemplate('${t.id}')">✕</button>
+        </div>
+      </div>`;
+  }).join('') : `<p class="paste-help">No templates yet. Open a services group’s ••• menu and choose “Save as template” to create one.</p>`;
+  openModal({ title:'Services templates', wide:false, confirmLabel:'', cancelLabel:'Close',
+    bodyHTML:`<div class="tpl-list">${list}</div>` });
+}
 function addService(gi){ ensureServices()[gi].rows.push(blankService()); markDirty(); render(); }
 function delService(gi,si){ ensureServices()[gi].rows.splice(si,1); markDirty(); render(); }
 /* Reorder a service line within its group (used by drag and the ▲▼ buttons). */
