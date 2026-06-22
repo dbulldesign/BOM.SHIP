@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.63.0";
+const APP_VERSION = "1.63.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1125,6 +1125,21 @@ function setStickyHead(on){ uiSettings.stickyHead = !!on; saveSettings(); applyS
 function setFreezeCols(on){ uiSettings.freezeCols = !!on; saveSettings(); applySettings(); render(); }
 function setCardView(on){ uiSettings.cardView = !!on; saveSettings(); applySettings(); }
 
+/* Auto-grow wrap-mode text cells (Part #, Description, Source, Notes, service
+   description). CSS field-sizing:content handles this in Chromium, but Safari
+   (iPhone/Mac) doesn't support it, so the textarea stayed one line and clipped.
+   Setting height to scrollHeight works everywhere and stays the source of truth. */
+function sizeTextarea(el){
+  if(!el || el.tagName!=='TEXTAREA') return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+function autoGrowTextareas(){
+  if(uiSettings.colText!=='wrap') return;
+  const pane = document.getElementById('pane'); if(!pane) return;
+  pane.querySelectorAll('textarea.txt, textarea.svc-desc').forEach(sizeTextarea);
+}
+
 /* Freeze the left identifier columns (through Description) of the fixtures &
    controls tables so they stay visible when scrolling wide tables horizontally.
    Measures the live header widths and pins those cells with position:sticky. */
@@ -2080,6 +2095,7 @@ function renderPane(){
   lockBomInputs();
   applyColOrder();
   applyFreeze();
+  autoGrowTextareas();
   if(_colMenuOpen){ const m=document.getElementById('colMenu'); if(m) m.style.display='block'; }   // keep the Columns popover open across reorders
 }
 
@@ -2644,6 +2660,8 @@ function bindPane(){
   const pane = document.getElementById("pane");
   if(!_paneDelegated){
     pane.addEventListener("change", onPaneChange);
+    /* Grow wrap-mode text cells live as the user types (Safari has no field-sizing) */
+    pane.addEventListener("input", e=>{ const t=e.target; if(t && t.tagName==='TEXTAREA' && (t.classList.contains('txt')||t.classList.contains('svc-desc'))) sizeTextarea(t); });
     pane.addEventListener("focusin", e=>{ const t=e.target; if(t && 'value' in t) t._focusVal = t.value; });
     pane.addEventListener("keydown", onPaneKeydown);
     pane.addEventListener("mouseover", onPaneLinkHover);
