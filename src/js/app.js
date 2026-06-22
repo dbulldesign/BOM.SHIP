@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.57.0";
+const APP_VERSION = "1.58.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1556,7 +1556,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
   }
   const defX = pct2x(defMarkup);
   const selCol = uiSettings.showSelect;        // leftmost selection-checkbox column
-  const NCOLS = (allowAccessories ? 15 : 14) + (selCol?1:0);   // fixtures add a Tag column; +1 for Mfr ×; +1 for select
+  const NCOLS = (allowAccessories ? 15 : 14) + 1;   // fixtures add a Tag column; +1 Mfr ×; +1 lead (drag/select) column
 
   /* Link groups (fixtures only): give each shared-cost group a stable colour,
      a short label (the master's TYPE) and a member count so every linked row —
@@ -1579,7 +1579,9 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       if(r.linkMaster){ const t=(r.type||'').trim(); g.masterType = t; g.masterLabel = t || (r.part||'').trim() || 'master'; }
     });
   }
-  function selCell(r){ return selCol ? `<td class="col-sel no-print"><input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')"></td>` : ''; }
+  /* Leftmost "lead" column: always shows the drag handle; also the selection
+     checkbox when the select column is enabled (sits right next to it). */
+  function selCell(r){ return `<td class="col-lead no-print"><span class="drag-grip" title="Drag to move row (works on touch)">⠿</span>${selCol ? `<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">` : ''}</td>`; }
   /* per-column filter input (shown when the Filters row is toggled on) */
   const cfIn = f => `<input class="col-filter-in" value="${esc(bomColFilters[f]||'')}" placeholder="filter…" oninput="setColFilter('${f}',this.value)" aria-label="Filter by ${f}">`;
 
@@ -1640,7 +1642,6 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td class="col-notes" style="width:150px">${txtField(r.note||'', da, 'note', 'Notes', {})}</td>
       <td style="width:110px" class="no-print row-actions">
         ${selCol?'':`<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select for bulk edit (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">`}
-        <span class="drag-grip" title="Drag to move row (works on touch)">⠿</span>
         ${linkBtn}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
@@ -1663,7 +1664,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       const qInherit = (a.qty===null||a.qty==="");
       const mInherit = (a.markup===null||a.markup==="");
       return `<tr class="acc-row">
-        ${selCol?'<td class="col-sel no-print"></td>':''}
+        <td class="col-lead no-print"></td>
         <td style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
         <td style="width:78px"><span class="acc-pill">Acc</span></td>
         <td class="col-tag" style="width:118px"></td>
@@ -1766,7 +1767,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     <div class="sec-add-bar no-print">${addBtns}</div>
     <div class="table-scroll">
     <table class="bom-table">
-      <colgroup>${(selCol?'<col class="col-sel no-print" style="width:30px">':'')}${(allowAccessories
+      <colgroup>${`<col class="col-lead no-print" style="width:${selCol?44:24}px">`}${(allowAccessories
         ? ['qty','type','tag','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
         : ['qty','type','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes','actions']
       ).map(key=>{
@@ -1777,7 +1778,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         return `<col data-col="${key}" style="width:${w}px">`;
       }).join('')}</colgroup>
       <thead><tr>
-        ${selCol?'<th class="col-sel no-print"><input type="checkbox" tabindex="-1" title="Select / clear all in this table" onclick="toggleSelectAll(\''+kind+'\', this.checked)"></th>':''}
+        <th class="col-lead no-print">${selCol?'<input type="checkbox" tabindex="-1" title="Select / clear all in this table" onclick="toggleSelectAll(\''+kind+'\', this.checked)">':''}</th>
         ${th('qty','Qty','r')}
         ${th('type','Type')}
         ${allowAccessories ? th('tag','Tag','col-tag') : ''}
@@ -1795,7 +1796,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         <th class="no-print"></th>
       </tr>
       ${bomFilterOpen ? `<tr class="col-filter-row no-print">
-        ${selCol?'<th></th>':''}
+        <th></th>
         <th></th>
         <th>${cfIn('type')}</th>
         ${allowAccessories?`<th>${cfIn('tag')}</th>`:''}
@@ -1853,7 +1854,7 @@ function allowanceFreightRows(kind){
 function servicesTable(opt){
   const groups = opt.services || [];
   const tot = servicesTotals(groups);
-  const NC = 9;
+  const NC = 10;   // +1 for the left lead (drag handle) column
 
   const groupHTML = groups.map((g,gi)=>{
     const units = serviceUnits(g.type);
@@ -1866,6 +1867,7 @@ function servicesTable(opt){
       const locCell = (s.unit==='Lump Sum') ? `<td></td>`
         : `<td><select ${da} data-f="location">${locOpts}</select></td>`;
       const lineRow = `<tr data-svc-g="${gi}" data-svc-r="${si}">
+        <td class="col-lead no-print"><span class="svc-grip" title="Drag to reorder this line" data-svc-g="${gi}" data-svc-r="${si}">⠿</span></td>
         <td><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
         <td><select ${da} data-f="unit">${unitOpts}</select></td>
         ${locCell}
@@ -1875,7 +1877,6 @@ function servicesTable(opt){
         <td><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
         <td><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
         <td class="no-print row-actions">
-          <span class="svc-grip" title="Drag to reorder this line" data-svc-g="${gi}" data-svc-r="${si}">⠿</span>
           <button class="rowact" tabindex="-1" title="Duplicate this service line" onclick="dupService(${gi},${si})">⎘</button>
           <button class="rowdel" tabindex="-1" title="Delete service line" onclick="delService(${gi},${si})">✕</button>
         </td>
@@ -1889,6 +1890,7 @@ function servicesTable(opt){
           const ada = `data-svc-g="${gi}" data-svc-r="${si}" data-svc-a="${ai}"`;
           const qInherit = (a.qty===null||a.qty==='');
           return `<tr class="acc-row">
+            <td class="col-lead no-print"></td>
             <td><input class="num accqty-inherit" inputmode="decimal" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(s.qty,0)}" ${ada} data-f="addonqty"></td>
             <td><span class="acc-pill">Add</span></td>
             <td></td>
@@ -1936,11 +1938,13 @@ function servicesTable(opt){
     <div class="table-scroll">
     <table class="svc-table">
       <colgroup>
+        <col class="no-print" style="width:24px">
         <col style="width:60px"><col style="width:92px"><col style="width:104px">
         <col><col style="width:104px"><col style="width:110px">
-        <col style="width:120px"><col style="width:150px"><col class="no-print" style="width:90px">
+        <col style="width:120px"><col style="width:150px"><col class="no-print" style="width:64px">
       </colgroup>
       <thead><tr>
+        <th class="no-print"></th>
         <th class="r">Qty</th><th>Unit</th><th>Location</th><th>Description</th>
         <th class="r">Sell rate</th><th class="r">Ext. sell</th>
         <th>Price source</th><th>Notes</th><th class="no-print"></th>

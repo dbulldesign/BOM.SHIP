@@ -966,6 +966,10 @@
   /* leftmost selection column */
   td.col-sel,th.col-sel{text-align:center;padding:0 2px;width:30px}
   th.col-sel input,td.col-sel input{cursor:pointer;margin:0;vertical-align:middle}
+  /* leftmost "lead" column: drag handle (+ selection checkbox when enabled) */
+  td.col-lead,th.col-lead{text-align:center;padding:0 2px;white-space:nowrap;vertical-align:middle}
+  td.col-lead .drag-grip{padding:0 1px;font-size:.9rem}
+  td.col-lead .bom-check,th.col-lead input{cursor:pointer;margin:0 0 0 1px;vertical-align:middle}
   /* The bulk-edit bar follows the active theme (light surface in light mode,
      dark surface in dark mode) with an amber accent so it reads as a panel. */
   .bulk-bar{position:sticky;top:0;z-index:8;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
@@ -1072,6 +1076,7 @@
   .bom-locked .acc-menu,
   .bom-locked .rowact,
   .bom-locked .drag-grip,
+  .bom-locked .svc-grip,
   .bom-locked .col-resizer,
   .bom-locked .bulk-grp,
   .bom-locked .sec-markup{display:none !important}
