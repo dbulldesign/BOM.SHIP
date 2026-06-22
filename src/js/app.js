@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.55.0";
+const APP_VERSION = "1.56.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1865,7 +1865,7 @@ function servicesTable(opt){
       /* Lump Sum lines (e.g. site manual) have no In-Office / On-Site location. */
       const locCell = (s.unit==='Lump Sum') ? `<td></td>`
         : `<td><select ${da} data-f="location">${locOpts}</select></td>`;
-      const lineRow = `<tr>
+      const lineRow = `<tr data-svc-g="${gi}" data-svc-r="${si}">
         <td><input class="num" inputmode="decimal" value="${qtyVal(s.qty)}" placeholder="0" ${da} data-f="qty"></td>
         <td><select ${da} data-f="unit">${unitOpts}</select></td>
         ${locCell}
@@ -1875,6 +1875,7 @@ function servicesTable(opt){
         <td><input value="${esc(s.source||'')}" placeholder="" ${da} data-f="source"></td>
         <td><input value="${esc(s.note||'')}" placeholder="Notes" ${da} data-f="note"></td>
         <td class="no-print row-actions">
+          <span class="svc-grip" title="Drag to reorder this line" data-svc-g="${gi}" data-svc-r="${si}">⠿</span>
           <button class="rowact" tabindex="-1" title="Duplicate this service line" onclick="dupService(${gi},${si})">⎘</button>
           <button class="rowdel" tabindex="-1" title="Delete service line" onclick="delService(${gi},${si})">✕</button>
         </td>
@@ -1937,7 +1938,7 @@ function servicesTable(opt){
       <colgroup>
         <col style="width:60px"><col style="width:92px"><col style="width:104px">
         <col><col style="width:104px"><col style="width:110px">
-        <col style="width:120px"><col style="width:150px"><col class="no-print" style="width:52px">
+        <col style="width:120px"><col style="width:150px"><col class="no-print" style="width:90px">
       </colgroup>
       <thead><tr>
         <th class="r">Qty</th><th>Unit</th><th>Location</th><th>Description</th>
@@ -2593,6 +2594,10 @@ function bindPane(){
     pane.addEventListener("keydown", onPaneKeydown);
     pane.addEventListener("mouseover", onPaneLinkHover);
     pane.addEventListener("mouseleave", ()=>onPaneLinkHover({target:pane}));
+    pane.addEventListener("pointerdown", onSvcDragStart);
+    pane.addEventListener("pointermove", onSvcDragMove);
+    pane.addEventListener("pointerup", onSvcDragEnd);
+    pane.addEventListener("pointercancel", onSvcDragEnd);
     _paneDelegated = true;
   }
   bindTableInteractions(pane);
@@ -2893,6 +2898,49 @@ function addServiceGroup(){ ensureServices().push({id:uid(), name:"Services", ty
 function delServiceGroup(gi){ ensureServices().splice(gi,1); markDirty(); render(); }
 function addService(gi){ ensureServices()[gi].rows.push(blankService()); markDirty(); render(); }
 function delService(gi,si){ ensureServices()[gi].rows.splice(si,1); markDirty(); render(); }
+/* Reorder a service line within its group (used by drag and the ▲▼ buttons). */
+function moveServiceRow(gi, from, to){
+  const rows = ensureServices()[gi].rows;
+  if(from<0 || from>=rows.length || to<0 || to>=rows.length || from===to) return;
+  const [r] = rows.splice(from,1);
+  rows.splice(to,0,r);
+  markDirty(); render();
+}
+/* Pointer-based row drag for the services table — works with touch (iOS) and mouse,
+   unlike native HTML5 drag-and-drop. The grip carries data-svc-g / data-svc-r. */
+let _svcDrag = null;
+function onSvcDragStart(e){
+  const grip = e.target.closest && e.target.closest('.svc-grip');
+  if(!grip) return;
+  e.preventDefault();
+  const tr = grip.closest('tr');
+  _svcDrag = { gi:+grip.dataset.svcG, from:+grip.dataset.svcR, to:+grip.dataset.svcR };
+  if(tr) tr.classList.add('svc-dragging');
+  try{ grip.setPointerCapture(e.pointerId); }catch(_){}
+  document.body.classList.add('row-dragging');
+}
+function onSvcDragMove(e){
+  if(!_svcDrag) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const tr = el && el.closest && el.closest('tr[data-svc-g="'+_svcDrag.gi+'"]');
+  if(tr && tr.dataset.svcR!==undefined){
+    const ti = +tr.dataset.svcR;
+    if(ti!==_svcDrag.to){
+      _svcDrag.to = ti;
+      const pane = document.getElementById('pane');
+      if(pane){ pane.querySelectorAll('.svc-drop-target').forEach(x=>x.classList.remove('svc-drop-target')); tr.classList.add('svc-drop-target'); }
+    }
+  }
+}
+function onSvcDragEnd(){
+  if(!_svcDrag) return;
+  const {gi, from, to} = _svcDrag;
+  _svcDrag = null;
+  document.body.classList.remove('row-dragging');
+  const pane = document.getElementById('pane');
+  if(pane) pane.querySelectorAll('.svc-dragging,.svc-drop-target').forEach(x=>x.classList.remove('svc-dragging','svc-drop-target'));
+  if(from!==to) moveServiceRow(gi, from, to);
+}
 function dupService(gi,si){
   const rows = ensureServices()[gi].rows;
   if(!rows[si]) return;
