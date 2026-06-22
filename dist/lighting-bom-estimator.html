@@ -588,7 +588,7 @@
     text-transform:uppercase;letter-spacing:.06em;width:240px;padding:2px 4px}
   .section-cell input:focus{outline:none;background:#fff}
   body.dark .section-cell input:focus{background:#3A2F12}
-  .section-sub{margin-left:auto;font-family:var(--mono);font-size:.76rem;color:var(--ink-soft);padding-right:6px;display:flex;gap:16px}
+  .section-sub{margin-left:14px;font-family:var(--mono);font-size:.76rem;color:var(--ink-soft);padding-right:6px;display:flex;gap:16px}
   .section-sub b{color:var(--sell)}
   .section-cell .rowact{font-size:.68rem;padding:2px 7px;white-space:nowrap;color:var(--ink-soft)}
   /* Services template manager */
@@ -1986,7 +1986,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.62.0";
+const APP_VERSION = "1.62.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 

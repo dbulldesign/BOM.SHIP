@@ -577,7 +577,7 @@
     text-transform:uppercase;letter-spacing:.06em;width:240px;padding:2px 4px}
   .section-cell input:focus{outline:none;background:#fff}
   body.dark .section-cell input:focus{background:#3A2F12}
-  .section-sub{margin-left:auto;font-family:var(--mono);font-size:.76rem;color:var(--ink-soft);padding-right:6px;display:flex;gap:16px}
+  .section-sub{margin-left:14px;font-family:var(--mono);font-size:.76rem;color:var(--ink-soft);padding-right:6px;display:flex;gap:16px}
   .section-sub b{color:var(--sell)}
   .section-cell .rowact{font-size:.68rem;padding:2px 7px;white-space:nowrap;color:var(--ink-soft)}
   /* Services template manager */
