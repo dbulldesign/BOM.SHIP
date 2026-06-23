@@ -612,6 +612,12 @@
   .acc-menu-list button:last-child{border-bottom:none}
   .acc-menu-list button:hover{background:var(--amber-wash);color:var(--amber-deep)}
   body.dark .acc-menu-list button:hover{background:#2A2310}
+  /* The part/accessory menu now lives in the row's action cell (far right), so
+     open it leftward from the button instead of off the right edge of the table. */
+  .row-actions .acc-menu-list{left:auto;right:0}
+  /* Group roll-up shown next to the "N parts" collapse toggle */
+  .grp-sub{margin-left:12px;font-family:var(--mono);font-size:.72rem;color:var(--ink-soft)}
+  .grp-sub b{color:var(--sell)}
   .accqty-inherit::placeholder{color:#C9A86C;font-style:italic}
   .sec-add-bar{display:flex;gap:8px;padding:6px 8px;border-bottom:1px solid var(--rule)}
   .sec-add-bar button{border-color:var(--rule-dark);font-weight:500;font-size:.78rem}

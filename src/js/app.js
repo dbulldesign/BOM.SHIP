@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.67.0";
+const APP_VERSION = "1.68.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1720,6 +1720,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td style="width:110px" class="no-print row-actions card-actions">
         ${selCol?'':`<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select for bulk edit (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">`}
         ${linkBtn}
+        ${allowAccessories?`<span class="acc-menu" data-accmenu="${kind}_${i}"><button class="rowact" tabindex="-1" title="Add a part / accessory to this fixture group" onclick="toggleAccMenu('${kind}_${i}')">⊕</button><span class="acc-menu-list" id="accmenu_${kind}_${i}" style="display:none">${accessoryPresets().map((p,pi)=>`<button onclick="addAccessory('${kind}',${i},${pi})">${esc(p.label)}</button>`).join('')}</span></span>`:''}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
         <button class="rowdel" tabindex="-1" title="Delete ${allowAccessories?'fixture':'control'}" onclick="delRow('${kind}',${i})">✕</button>
@@ -1729,10 +1730,16 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
   function accessoryRowsHTML(r, i){
     if(!allowAccessories) return "";
     const accs = r.accessories||[];
+    /* No always-on "+ Add accessory" line — a row stays clean until it has parts.
+       Parts are added on demand from the row's ⊕ menu (see the actions cell). */
+    if(!accs.length) return "";
     const open = accExpanded.has(r.id);
-    /* Collapsed by default to keep the BOM clean: show a single compact toggle. */
+    /* Group roll-up: the mark's own line + all its parts (each sharing the mark qty) */
+    let grpCost = rowCalc(r, defMarkup).extCost, grpSell = rowCalc(r, defMarkup).extSell;
+    accs.forEach(a=>{ const ac=accCalc(a,r,defMarkup); grpCost+=ac.extCost; grpSell+=ac.extSell; });
     const toggleRow = `<tr class="acc-toggle-row no-print"><td colspan="${NCOLS}">
-      <button class="acc-collapse-btn" onclick="toggleAcc('${r.id}')">${open?'▾':'▸'} ${accs.length? accs.length+' accessor'+(accs.length===1?'y':'ies') : 'Add accessory'}</button>
+      <button class="acc-collapse-btn" onclick="toggleAcc('${r.id}')">${open?'▾':'▸'} ${accs.length} part${accs.length===1?'':'s'}</button>
+      <span class="grp-sub">Group total — Cost ${money(grpCost)} · Sell <b>${money(grpSell)}</b></span>
     </td></tr>`;
     if(!open) return toggleRow;
     const accHTML = accs.map((a,ai)=>{
@@ -1759,14 +1766,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         <td style="width:30px" class="no-print card-actions"><button class="rowdel" title="Delete accessory" onclick="delAccessory('${kind}',${i},${ai})">✕</button></td>
       </tr>`;
     }).join("");
-    const addRowHTML = `<tr class="acc-row no-print"><td class="acc-add-cell" colspan="${NCOLS}">
-      <span class="acc-menu" data-accmenu="${kind}_${i}">
-        <button class="acc-add-btn" onclick="toggleAccMenu('${kind}_${i}')">+ Add accessory ▾</button>
-        <span class="acc-menu-list" id="accmenu_${kind}_${i}" style="display:none">
-          ${accessoryPresets().map((p,pi)=>`<button onclick="addAccessory('${kind}',${i},${pi})">${esc(p.label)}</button>`).join('')}
-        </span>
-      </span></td></tr>`;
-    return toggleRow + accHTML + addRowHTML;
+    return toggleRow + accHTML;
   }
   function sectionRowHTML(r, i, secTot){
     const collapsed = secCollapsed.has(r.id);
