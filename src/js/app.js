@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.63.4";
+const APP_VERSION = "1.64.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -5752,31 +5752,28 @@ function renderRecents(){
      </span>`).join("");
 }
 
+/* Minimal print heading shown only on the printout: Focus logo, the document
+   title "Bill of Materials", and the job name. (The on-screen title block does
+   not print — see @media print.) Built here so it works from the Print button
+   and from the browser's own Print/Ctrl-P via the beforeprint handler. */
+function buildPrintBanner(){
+  const banner = document.getElementById('printBanner');
+  if(!banner){ return; }
+  banner.innerHTML = `<div class="print-banner">
+    <div class="pb-head">
+      ${logoImg()}
+      <div class="pb-titles">
+        <div class="pb-co">Bill of Materials</div>
+        ${state.name?`<div class="pb-proj">${esc(state.name)}</div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
 /* Print / PDF — routes to the right output for the current view */
 function printEstimate(){
   if(view === 'shipping'){ openShipPrint(); return; }
   if(view === 'advice'){ printAdvices(); return; }
-  /* Build a branded banner (company + project header) shown only on the printout. */
-  const opt = state.options[state.current];
-  const banner = document.getElementById('printBanner');
-  if(banner){
-    const meta = [];
-    if(state.jobCode) meta.push('Job code: '+esc(state.jobCode));
-    if(state.client) meta.push('Client: '+esc(state.client));
-    if(state.preparedBy) meta.push('Prepared by: '+esc(state.preparedBy));
-    if(state.date) meta.push(esc(state.date));
-    if(opt) meta.push('Option: '+esc(opt.name)+(opt.approved?' (Approved)':''));
-    banner.innerHTML = `<div class="print-banner">
-      <div class="pb-head">
-        ${logoImg()}
-        <div class="pb-titles">
-          ${state.company?`<div class="pb-co">${esc(state.company)}</div>`:''}
-          <div class="pb-proj">${esc(state.name||'Lighting Bill of Materials')}</div>
-        </div>
-      </div>
-      <div class="pb-meta">${meta.join(' &nbsp;·&nbsp; ')}</div>
-    </div>`;
-  }
+  buildPrintBanner();
   setTimeout(()=>{ try{ window.print(); }catch(e){ toast('Use your browser menu → Print'); } }, 60);
 }
 
@@ -6067,8 +6064,25 @@ window.addEventListener("keydown", e=>{
    then restore it afterward. Covers the in-document estimate print (ship advice
    and ship schedule open their own already-light print windows). */
 let _printWasDark = false;
-function _beforePrintLight(){ _printWasDark = document.body.classList.contains('dark'); if(_printWasDark) document.body.classList.remove('dark'); }
-function _afterPrintRestore(){ if(_printWasDark){ document.body.classList.add('dark'); _printWasDark = false; } }
+let _printPrevColText = null;
+function _beforePrintLight(){
+  _printWasDark = document.body.classList.contains('dark'); if(_printWasDark) document.body.classList.remove('dark');
+  /* Estimate printouts: build the slim heading and force wrap mode so long Part #
+     / Description text expands to fit instead of clipping to one line. */
+  if(view === 'estimate'){
+    buildPrintBanner();
+    if(uiSettings.colText !== 'wrap'){
+      _printPrevColText = uiSettings.colText;
+      uiSettings.colText = 'wrap';
+      document.body.classList.add('coltext-wrap'); document.body.classList.remove('coltext-fit');
+      render();
+    }
+  }
+}
+function _afterPrintRestore(){
+  if(_printWasDark){ document.body.classList.add('dark'); _printWasDark = false; }
+  if(_printPrevColText !== null){ uiSettings.colText = _printPrevColText; _printPrevColText = null; applySettings(); render(); }
+}
 window.addEventListener('beforeprint', _beforePrintLight);
 window.addEventListener('afterprint', _afterPrintRestore);
 

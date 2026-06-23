@@ -755,6 +755,29 @@
     .print-banner .pb-co{font-size:1.4rem;font-weight:800;color:#20242C;letter-spacing:.01em}
     .print-banner .pb-proj{font-size:1.05rem;font-weight:700;margin-top:2px}
     .print-banner .pb-meta{font-size:.78rem;color:#555;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap}
+
+    /* Default to landscape so the wide BOM fits across the page */
+    @page{ size: landscape; margin: 0.45in; }
+    /* The drawing-sheet title block (top header) and on-screen helpers don't print —
+       the slim banner above (logo · Bill of Materials · job) is the only heading. */
+    .titleblock, .hint, .save-stamp, .backups-note{ display:none !important; }
+
+    /* Fit the whole BOM across the landscape width instead of running off the page */
+    .section .table-scroll{ overflow:visible !important; }
+    .bom-table, .svc-table{ width:100% !important; min-width:0 !important; table-layout:auto !important;
+      font-size:7.5pt !important; }
+    .bom-table colgroup col, .svc-table colgroup col{ width:auto !important; }
+    .bom-table .col-lead, .svc-table .col-lead, .card-summary, .sort-icon, .col-resizer{ display:none !important; }
+    .bom-table th, .bom-table td, .svc-table th, .svc-table td{ overflow:visible !important; padding:2px 4px !important; }
+    /* Only the free-text columns wrap; numbers and calc totals stay on one line */
+    .bom-table .col-part, .bom-table .col-desc, .bom-table .col-source, .bom-table .col-notes,
+    .svc-table td{ white-space:normal !important; word-break:break-word; }
+    .bom-table td.calc, .svc-table td.calc, .bom-table td input.num, .svc-table td input.num{ white-space:nowrap !important; }
+    /* Text fields expand to show their full value (no one-line clipping on the printout) */
+    .bom-table td input, .bom-table td textarea,
+    .svc-table td input, .svc-table td textarea{
+      height:auto !important; min-height:0 !important; overflow:visible !important;
+      text-overflow:clip !important; field-sizing:content; }
   }
   /* dark-mode overrides for elements using non-variable colours */
   body.dark .tab{background:#1E2129}
