@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.63.3";
+const APP_VERSION = "1.63.4";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -971,7 +971,11 @@ function applyColOrder(){
     for(let k=0;k<n;k++){ if(!used[k]){ seq.push(k); used[k]=true; } }   // trailing (actions, etc.) in place
     if(seq.every((idx,p)=>idx===p)) return;                    // identity for this table
     const reorder = (parent)=>{
-      const kids = Array.from(parent.children);
+      let kids = Array.from(parent.children);
+      /* Data rows lead with a card-summary cell (phone view) the colgroup lacks;
+         exclude it from the reorder so the real columns still line up. It stays
+         first because the reordered cells are appended after it. */
+      if(kids[0] && kids[0].classList && kids[0].classList.contains('card-summary')) kids = kids.slice(1);
       if(kids.length !== n) return;                            // colspan row — skip
       seq.forEach(idx=> parent.appendChild(kids[idx]));
     };
@@ -1176,8 +1180,12 @@ function applyFreeze(){
     for(let i=0;i<K;i++) pin(ths[i], i, true);
     const tb = table.tBodies[0]; if(!tb) return;
     Array.prototype.forEach.call(tb.rows, tr=>{
-      if(tr.cells.length < K) return;               // colspan rows (section / add / acc-toggle) — skip
-      for(let i=0;i<K;i++) pin(tr.cells[i], i, false);
+      /* Data rows carry a leading card-summary cell (phone view, display:none here)
+         that the header doesn't have — skip it so column indexes line up, otherwise
+         every frozen cell is pinned one column off and content bleeds through. */
+      const off = (tr.cells[0] && tr.cells[0].classList.contains('card-summary')) ? 1 : 0;
+      if(tr.cells.length - off < K) return;         // colspan rows (section / add / acc-toggle) — skip
+      for(let i=0;i<K;i++) pin(tr.cells[i+off], i, false);
     });
   });
 }
