@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.65.0";
+const APP_VERSION = "1.66.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -4599,16 +4599,20 @@ function exportEstimatePDF(){
   if(!jsPDF){ toast('PDF engine could not load'); return; }
   const M = 36;
   const doc = new jsPDF({unit:'pt', format:'letter', orientation:'landscape'});
-  const cols = [
-    {key:'qty', label:'QTY', w:34, align:'right'},
-    {key:'type', label:'TYPE', w:46},
-    {key:'mfr', label:'MANUFACTURER', w:96},
-    {key:'desc', label:'DESCRIPTION', w:250},
-    {key:'part', label:'PART #', w:96},
-    {key:'unitSell', label:'UNIT SELL', w:74, align:'right'},
-    {key:'extSell', label:'EXT. SELL', w:84, align:'right'}
-  ];
-  let y = pdfHeaderBlock(doc, M, 'Estimate');
+  let cols = bomPdfColumns();
+  /* Scale the column widths down proportionally if the selected set is wider
+     than the page, so the table always fits the landscape sheet. */
+  const usable = doc.internal.pageSize.getWidth() - 2*M;
+  const rawW = cols.reduce((a,c)=>a+c.w,0);
+  if(rawW > usable){ const f = usable/rawW; cols = cols.map(c=>({...c, w:Math.max(20, Math.floor(c.w*f))})); }
+  const cellsFor = (src, calc, dm, type)=>{
+    const eff = (src.markup===''||src.markup==null)? dm : numOr(src.markup,0);
+    return { qty:src.qty, type:(type||src.type||''), tag:src.tag||'', mfr:src.mfr||'', part:src.part||'',
+      desc:src.desc||'', unitCost:money(numOr(src.unitCost,0)*mfrMultOf(src)), mfrMult:String(mfrMultOf(src)),
+      markup:pct2x(eff), unitSell:money(calc.unitSell), extCost:money(calc.extCost), extSell:money(calc.extSell),
+      source:src.source||'', notes:src.note||'' };
+  };
+  let y = pdfHeaderBlock(doc, M, 'Bill of Materials');
   state.options.forEach((opt, oi)=>{
     const t = optionTotals(opt);
     if(oi>0) y += 6;
@@ -4621,14 +4625,15 @@ function exportEstimatePDF(){
       (opt[kind]||[]).forEach(r=>{
         if(r.isSection){ rows.push({kind:'section', label:'  '+(r.name||'Section')}); return; }
         const c = rowCalc(r, dm);
-        rows.push({kind:'data', cells:{qty:r.qty, type:r.type, mfr:r.mfr||'', desc:r.desc||'', part:r.part||'', unitSell:money(c.unitSell), extSell:money(c.extSell)}});
-        (r.accessories||[]).forEach(a=>{ const ac=accCalc(a,r,dm); rows.push({kind:'data', cells:{qty:ac.qty, type:'Acc', mfr:a.mfr||'', desc:a.desc||'', part:a.part||'', unitSell:money(ac.unitSell), extSell:money(ac.extSell)}}); });
+        rows.push({kind:'data', cells:cellsFor(r, c, dm)});
+        (r.accessories||[]).forEach(a=>{ const ac=accCalc(a,r,dm); rows.push({kind:'data', cells:cellsFor(a, ac, dm, 'Acc')}); });
       });
     });
     y = pdfTable(doc, cols, rows, y, M);
     /* totals */
     y += 4;
-    const lineY = (lbl,val,bold)=>{ if(y>doc.internal.pageSize.getHeight()-M-14){ doc.addPage(); y=M; } doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(9); doc.text(lbl, M+360, y+9, {align:'right'}); doc.text(val, M+ cols.reduce((a,c)=>a+c.w,0), y+9, {align:'right'}); y+=13; };
+    const totW = cols.reduce((a,c)=>a+c.w,0);
+    const lineY = (lbl,val,bold)=>{ if(y>doc.internal.pageSize.getHeight()-M-14){ doc.addPage(); y=M; } doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(9); doc.text(lbl, M+Math.max(120, totW-90), y+9, {align:'right'}); doc.text(val, M+totW, y+9, {align:'right'}); y+=13; };
     lineY('Subtotal', money(t.baseSub));
     if(t.tax) lineY('Tax ('+state.taxRate+'%)', money(t.tax));
     lineY('Total', money(t.grand), true);
@@ -4729,7 +4734,22 @@ function exportAdvicePDF(){
 /* Route the toolbar PDF button / command by the active view. */
 function exportPDF(){
   if(view==='advice') return exportAdvicePDF();
-  return exportEstimatePDF();
+  if(view==='shipping') return openShipPrint();   // ship schedule: column picker → printable/PDF window
+  return openBomPdf();                             // BOM: column picker → PDF download
+}
+/* BOM PDF columns, filtered by the print-column choice (Qty/Type always shown). */
+function bomPdfColumns(){
+  const defs = {
+    qty:{label:'QTY',w:30,align:'right'}, type:{label:'TYPE',w:42}, tag:{label:'TAG',w:50},
+    mfr:{label:'MANUFACTURER',w:84}, part:{label:'PART #',w:84}, desc:{label:'DESCRIPTION',w:150},
+    unitCost:{label:'UNIT COST',w:58,align:'right'}, mfrMult:{label:'MFR x',w:34,align:'right'},
+    markup:{label:'MARKUP',w:46,align:'right'}, unitSell:{label:'UNIT SELL',w:60,align:'right'},
+    extCost:{label:'EXT. COST',w:64,align:'right'}, extSell:{label:'EXT. SELL',w:68,align:'right'},
+    source:{label:'PRICE SOURCE',w:78}, notes:{label:'NOTES',w:78}
+  };
+  const order = ['qty','type','tag','mfr','part','desc','unitCost','mfrMult','markup','unitSell','extCost','extSell','source','notes'];
+  const always = new Set(['qty','type']);
+  return order.filter(k=> always.has(k) || !bomPrintHidden.has(k)).map(k=>({key:k, ...defs[k]}));
 }
 
 /* ================= Vendor / Purchase-Order grouping (opt-in) ================= */
@@ -5796,9 +5816,9 @@ function applyBomPrintCols(){
     }));
   });
 }
-function openBomPrint(){
+function openBomColumnPicker(opts){
   const cols = HIDEABLE_COLS.map(([k,label])=>`<label class="set-opt" style="padding:6px 10px;margin-bottom:4px"><input type="checkbox" data-bomcol="${k}" ${bomPrintHidden.has(k)?'':'checked'}> ${esc(label)}</label>`).join('');
-  const body = `<p class="paste-help">Choose which columns to print. <b>Qty</b> and <b>Type</b> always print. <b>All</b> shows everything; <b>Client</b> hides Unit cost, Mfr ×, Markup, Ext. cost and Price source; <b>Custom</b> is your own pick.</p>
+  const body = `<p class="paste-help">Choose which columns to ${esc(opts.verb)}. <b>Qty</b> and <b>Type</b> are always included. <b>All</b> shows everything; <b>Client</b> hides Unit cost, Mfr ×, Markup, Ext. cost and Price source; <b>Custom</b> is your own pick.</p>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="ghost" data-preset="all">All</button>
       <button class="ghost" data-preset="client">Client</button>
@@ -5806,8 +5826,8 @@ function openBomPrint(){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px">${cols}</div>`;
   openModal({
-    title:'Print bill of materials', bodyHTML:body, wide:true, confirmLabel:'Print', cancelLabel:'Cancel',
-    onConfirm(){ saveBomPrintCols(); closeModal(); _doBomPrint(); },
+    title:opts.title, bodyHTML:body, wide:true, confirmLabel:opts.confirmLabel, cancelLabel:'Cancel',
+    onConfirm(){ saveBomPrintCols(); closeModal(); opts.action(); },
     onOpen(back){
       const boxes = back.querySelectorAll('[data-bomcol]');
       const reflect = ()=> boxes.forEach(cb=>{ cb.checked = !bomPrintHidden.has(cb.dataset.bomcol); });
@@ -5821,6 +5841,8 @@ function openBomPrint(){
     }
   });
 }
+function openBomPrint(){ openBomColumnPicker({ title:'Print bill of materials', confirmLabel:'Print', verb:'print', action:_doBomPrint }); }
+function openBomPdf(){ openBomColumnPicker({ title:'Download BOM PDF', confirmLabel:'Download PDF', verb:'include in the PDF', action:exportEstimatePDF }); }
 function _doBomPrint(){
   /* The beforeprint handler builds the banner, forces wrap and applies the
      chosen print columns — here we just open the print dialog. */
