@@ -638,6 +638,14 @@
   .cat-collapsed .sec-add-bar,
   .cat-collapsed .table-scroll{display:none}
   .cat-collapsed .sec-foot{display:none}
+  /* Custom Tag autocomplete popup (replaces the native datalist on row Tag cells) */
+  .tag-combo{position:absolute;z-index:60;background:var(--sheet);border:1px solid var(--ink);
+    border-radius:3px;box-shadow:0 4px 14px rgba(0,0,0,.18);max-height:240px;overflow-y:auto;min-width:110px}
+  .tag-combo button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--rule);
+    background:transparent;color:var(--ink);padding:6px 10px;font-size:.82rem;cursor:pointer;border-radius:0}
+  .tag-combo button:last-child{border-bottom:none}
+  .tag-combo button.hi,.tag-combo button:hover{background:var(--amber-wash);color:var(--amber-deep)}
+  body.dark .tag-combo button.hi,body.dark .tag-combo button:hover{background:#2A2310}
   .accqty-inherit::placeholder{color:#C9A86C;font-style:italic}
   .sec-add-bar{display:flex;gap:8px;padding:6px 8px;border-bottom:1px solid var(--rule)}
   .sec-add-bar button{border-color:var(--rule-dark);font-weight:500;font-size:.78rem}
@@ -2040,7 +2048,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.69.0";
+const APP_VERSION = "1.70.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3140,6 +3148,65 @@ function toggleAcc(rowId){ if(accExpanded.has(rowId)) accExpanded.delete(rowId);
 function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); else secCollapsed.add(id); render(); }
 function toggleCat(key){ if(catCollapsed.has(key)) catCollapsed.delete(key); else catCollapsed.add(key); render(); }
 
+/* ===== Custom Tag autocomplete =====================================================
+   The native <datalist> on the row Tag cells gives inconsistent keyboard behaviour
+   (arrows/Tab/Enter) and the suggestion list can linger. This small combobox replaces
+   it: type to filter, ↑/↓ to highlight, Enter or Tab to accept the highlight, Esc or
+   leaving the field to dismiss, and click to pick. One floating element is reused for
+   every Tag input (the pane re-renders constantly, so the popup lives on <body>). */
+const tagCombo = { el:null, input:null, items:[], hi:-1, suppress:false };
+/* After an accept the pane re-renders and may restore focus to the same Tag cell —
+   briefly suppress auto-opening so the popup doesn't spring back unwanted. */
+function tagComboSuppress(){ tagCombo.suppress = true; setTimeout(()=>{ tagCombo.suppress = false; }, 250); }
+function tagComboElem(){
+  if(!tagCombo.el){
+    const d = document.createElement('div');
+    d.className = 'tag-combo'; d.hidden = true;
+    d.addEventListener('mousedown', e=>{
+      const b = e.target.closest('[data-tagopt]'); if(!b) return;
+      e.preventDefault();                       // keep focus on the input; we commit explicitly
+      tagComboAccept(b.getAttribute('data-tagopt'));
+    });
+    document.body.appendChild(d);
+    tagCombo.el = d;
+  }
+  return tagCombo.el;
+}
+function tagComboOpen(input){ tagCombo.input = input; tagComboFilter(); }
+function tagComboFilter(){
+  const input = tagCombo.input; if(!input) return;
+  const q = (input.value||'').trim().toLowerCase();
+  const all = tagOptions();
+  tagCombo.items = q ? all.filter(t=>t.toLowerCase().includes(q)) : all.slice();
+  tagCombo.hi = tagCombo.items.length ? 0 : -1;
+  tagComboRender();
+}
+function tagComboRender(){
+  const el = tagComboElem();
+  if(!tagCombo.input || !tagCombo.items.length){ el.hidden = true; return; }
+  el.innerHTML = tagCombo.items.map((t,idx)=>
+    `<button type="button" data-tagopt="${esc(t)}"${idx===tagCombo.hi?' class="hi"':''}>${esc(t)}</button>`).join('');
+  const r = tagCombo.input.getBoundingClientRect();
+  el.style.left = (window.scrollX + r.left) + 'px';
+  el.style.top  = (window.scrollY + r.bottom + 2) + 'px';
+  el.style.minWidth = r.width + 'px';
+  el.hidden = false;
+  const hiBtn = el.querySelector('button.hi'); if(hiBtn) hiBtn.scrollIntoView({block:'nearest'});
+}
+function tagComboClose(){ tagCombo.input=null; tagCombo.items=[]; tagCombo.hi=-1; if(tagCombo.el) tagCombo.el.hidden = true; }
+function tagComboMove(delta){
+  if(!tagCombo.items.length) return;
+  tagCombo.hi = Math.max(0, Math.min(tagCombo.items.length-1, tagCombo.hi + delta));
+  tagComboRender();
+}
+function tagComboActive(el){ return tagCombo.input===el && tagCombo.el && !tagCombo.el.hidden && tagCombo.items.length; }
+function tagComboAccept(val){
+  const input = tagCombo.input; tagComboClose(); tagComboSuppress();
+  if(!input) return;
+  input.value = val;
+  input.dispatchEvent(new Event('change', {bubbles:true}));   // commit through the normal path
+}
+
 /* Global display settings (local to this browser). */
 const SETTINGS_KEY = 'lbom_settings_v1';
 const SETTINGS_DEFAULTS = { colText:'fit', showSelect:true, density:'comfortable', textScale:1, stickyHead:true, freezeCols:false, cardView:true };
@@ -3698,7 +3765,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
     const c = rowCalc(r, defMarkup);
     const da = `data-k="${kind}" data-i="${i}"`;
     const tagCell = allowAccessories
-      ? `<td class="col-tag" data-label="Tag" style="width:118px"><input class="tag-input" list="memTag" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
+      ? `<td class="col-tag" data-label="Tag" style="width:118px"><input class="tag-input" autocomplete="off" value="${esc(r.tag||'')}" placeholder="Tag" ${da} data-f="tag"></td>`
       : '';
     const grp = r.linkId ? linkInfo[r.linkId] : null;
     const linkCls = r.linkId ? (r.linkMaster ? ' link-master' : ' link-linked') : '';
@@ -4724,7 +4791,10 @@ function bindPane(){
     pane.addEventListener("change", onPaneChange);
     /* Grow wrap-mode text cells live as the user types (Safari has no field-sizing) */
     pane.addEventListener("input", e=>{ const t=e.target; if(t && t.tagName==='TEXTAREA' && (t.classList.contains('txt')||t.classList.contains('svc-desc'))) sizeTextarea(t); });
-    pane.addEventListener("focusin", e=>{ const t=e.target; if(t && 'value' in t) t._focusVal = t.value; });
+    pane.addEventListener("focusin", e=>{ const t=e.target; if(t && 'value' in t) t._focusVal = t.value;
+      if(t && t.classList && t.classList.contains('tag-input') && !tagCombo.suppress) tagComboOpen(t); });
+    pane.addEventListener("input", e=>{ const t=e.target; if(t && t.classList && t.classList.contains('tag-input')) tagComboFilter(); });
+    pane.addEventListener("focusout", e=>{ const t=e.target; if(t && t.classList && t.classList.contains('tag-input')) setTimeout(()=>{ if(document.activeElement!==t) tagComboClose(); }, 120); });
     pane.addEventListener("keydown", onPaneKeydown);
     pane.addEventListener("mouseover", onPaneLinkHover);
     pane.addEventListener("mouseleave", ()=>onPaneLinkHover({target:pane}));
@@ -4873,6 +4943,15 @@ function onPaneChange(e){
    across the re-render. Only applies to the fixture/control row inputs (data-k). */
 function onPaneKeydown(e){
   const el = e.target; if(!el || el.dataset.k===undefined) return;
+  /* Tag combobox takes priority over the spreadsheet-style nav while it's open */
+  if(el.classList && el.classList.contains('tag-input') && tagComboActive(el)){
+    if(e.key==="ArrowDown"){ e.preventDefault(); tagComboMove(1); return; }
+    if(e.key==="ArrowUp"){ e.preventDefault(); tagComboMove(-1); return; }
+    if(e.key==="Escape"){ e.preventDefault(); tagComboClose(); return; }
+    /* Enter / Tab: accept the highlight into the field, then fall through to the
+       normal Enter (commit + add/move row) / Tab (commit + move column) handling. */
+    if((e.key==="Enter" || e.key==="Tab") && tagCombo.hi>=0){ el.value = tagCombo.items[tagCombo.hi]; tagComboClose(); tagComboSuppress(); }
+  }
   if(e.key==="Enter"){
     if(el.tagName==="TEXTAREA"){ if(e.shiftKey) return; e.preventDefault(); }   // keep wrap fields single-logical-line
     const {k,i,ai} = el.dataset;

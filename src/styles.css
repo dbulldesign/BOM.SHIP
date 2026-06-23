@@ -627,6 +627,14 @@
   .cat-collapsed .sec-add-bar,
   .cat-collapsed .table-scroll{display:none}
   .cat-collapsed .sec-foot{display:none}
+  /* Custom Tag autocomplete popup (replaces the native datalist on row Tag cells) */
+  .tag-combo{position:absolute;z-index:60;background:var(--sheet);border:1px solid var(--ink);
+    border-radius:3px;box-shadow:0 4px 14px rgba(0,0,0,.18);max-height:240px;overflow-y:auto;min-width:110px}
+  .tag-combo button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--rule);
+    background:transparent;color:var(--ink);padding:6px 10px;font-size:.82rem;cursor:pointer;border-radius:0}
+  .tag-combo button:last-child{border-bottom:none}
+  .tag-combo button.hi,.tag-combo button:hover{background:var(--amber-wash);color:var(--amber-deep)}
+  body.dark .tag-combo button.hi,body.dark .tag-combo button:hover{background:#2A2310}
   .accqty-inherit::placeholder{color:#C9A86C;font-style:italic}
   .sec-add-bar{display:flex;gap:8px;padding:6px 8px;border-bottom:1px solid var(--rule)}
   .sec-add-bar button{border-color:var(--rule-dark);font-weight:500;font-size:.78rem}
