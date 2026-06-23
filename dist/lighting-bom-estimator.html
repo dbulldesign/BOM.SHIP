@@ -2025,7 +2025,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.66.0";
+const APP_VERSION = "1.67.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -2880,17 +2880,12 @@ function sortCol(kind, col){
 function sortedRows(rows, kind){
   const sc = sortCols[getSortKey(kind)];
   if(!sc || !sc.col) return rows.map((r,i)=>({r,i}));
-  const NUM = new Set(['qty','unitCost','markup','unitSell','extCost','extSell']);
+  const NUM = new Set(['qty','unitCost','mfrMult','markup','unitSell','extCost','extSell']);
   return rows.map((r,i)=>{
     const calc = rowCalc(r, state.options[state.current][kind==='fixtures'?'fixtureMarkup':'controlMarkup']);
     const augmented = {...r, unitSell:calc.unitSell, extCost:calc.extCost, extSell:calc.extSell};
     return {r, i, val: augmented[sc.col]};
-  }).sort((a,b)=>{
-    const av = a.val ?? (NUM.has(sc.col)?0:"");
-    const bv = b.val ?? (NUM.has(sc.col)?0:"");
-    if(NUM.has(sc.col)) return (av - bv) * sc.dir;
-    return String(av).localeCompare(String(bv)) * sc.dir;
-  });
+  }).sort((a,b)=> cmpSortVals(a.val, b.val, NUM.has(sc.col), sc.dir));
 }
 
 /* ================= Rendering ================= */
@@ -3069,6 +3064,19 @@ function bomCheckClick(ev, kind, id){
   }
   _lastBomClickId = id;
   render();
+}
+/* Reflect the live selection on each table's header checkbox: checked when every
+   row is selected, indeterminate when only some are (so it can also clear them). */
+function applySelAllBoxes(){
+  const pane = document.getElementById('pane'); if(!pane) return;
+  const o = state.options[state.current]; if(!o) return;
+  pane.querySelectorAll('input[data-selall]').forEach(cb=>{
+    const kind = cb.getAttribute('data-selall');
+    const data = (o[kind]||[]).filter(r=>!r.isSection);
+    const sel = data.filter(r=>bomSel.has(r.id)).length;
+    cb.checked = data.length>0 && sel===data.length;
+    cb.indeterminate = sel>0 && sel<data.length;
+  });
 }
 /* Header checkbox: select or clear every row in this table (fixtures or controls). */
 function toggleSelectAll(kind, on){
@@ -3438,11 +3446,18 @@ function sortEntries(entries, sc, defMarkup){
     const calc = rowCalc(e.r, defMarkup);
     const aug = {...e.r, unitSell:calc.unitSell, extCost:calc.extCost, extSell:calc.extSell};
     return {r:e.r, i:e.i, val:aug[sc.col]};
-  }).sort((a,b)=>{
-    const av = a.val ?? (NUM.has(sc.col)?0:""), bv = b.val ?? (NUM.has(sc.col)?0:"");
-    if(NUM.has(sc.col)) return (av-bv)*sc.dir;
-    return String(av).localeCompare(String(bv))*sc.dir;
-  });
+  }).sort((a,b)=> cmpSortVals(a.val, b.val, NUM.has(sc.col), sc.dir));
+}
+/* Shared column comparator: empty cells always sink to the bottom (whichever the
+   sort direction); the rest sort numerically, or alphabetically with natural
+   number ordering so F1 < F2 < F10 (not F1 < F10 < F2). */
+function cmpSortVals(av, bv, isNum, dir){
+  const aE = av===''||av==null, bE = bv===''||bv==null;
+  if(aE && bE) return 0;
+  if(aE) return 1;
+  if(bE) return -1;
+  if(isNum) return (numOr(av,0)-numOr(bv,0))*dir;
+  return String(av).localeCompare(String(bv), undefined, {numeric:true, sensitivity:'base'})*dir;
 }
 
 /* Dim rows that don't match the find box; highlight those that do. Works on the
@@ -3854,7 +3869,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
         return `<col data-col="${key}" style="width:${w}px">`;
       }).join('')}</colgroup>
       <thead><tr>
-        <th class="col-lead no-print">${selCol?'<input type="checkbox" tabindex="-1" title="Select / clear all in this table" onclick="toggleSelectAll(\''+kind+'\', this.checked)">':''}</th>
+        <th class="col-lead no-print">${selCol?'<input type="checkbox" tabindex="-1" data-selall="'+kind+'" title="Select / clear all in this table" onclick="toggleSelectAll(\''+kind+'\', this.checked)">':''}</th>
         ${th('qty','Qty','r')}
         ${th('type','Type')}
         ${allowAccessories ? th('tag','Tag','col-tag') : ''}
@@ -4118,6 +4133,7 @@ function renderPane(){
   applyColOrder();
   applyFreeze();
   autoGrowTextareas();
+  applySelAllBoxes();
   if(_colMenuOpen){ const m=document.getElementById('colMenu'); if(m) m.style.display='block'; }   // keep the Columns popover open across reorders
 }
 
