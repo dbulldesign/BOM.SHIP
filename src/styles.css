@@ -631,7 +631,7 @@
   .stamp-row .val{font-family:var(--mono);font-size:.95rem}
   .stamp-row.muted .val{color:var(--ink-soft);font-size:.85rem}
   .stamp-row.tax .lbl{display:flex;align-items:center;gap:6px}
-  .stamp-row.tax input{background:transparent}
+  .stamp-row.tax input{background:transparent;color:var(--ink)}
   .stamp-row.grand{background:var(--chip);color:#fff;padding:12px 14px}
   .stamp-row.grand .lbl{color:#E9B45C;font-weight:700}
   .stamp-row.grand .val{font-size:1.3rem;font-weight:600;color:#fff}
