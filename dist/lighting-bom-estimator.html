@@ -2048,7 +2048,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.70.0";
+const APP_VERSION = "1.70.1";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -3848,7 +3848,7 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       return `<tr class="acc-row">
         <td class="col-lead no-print"></td>
         <td data-label="Qty" style="width:54px"><input class="num accqty-inherit" inputmode="numeric" value="${qInherit?'':qtyVal(a.qty)}" placeholder="${numOr(r.qty,0)}" ${da} data-f="accqty"></td>
-        <td data-label="Type" style="width:78px"><span class="acc-pill">Acc</span></td>
+        <td data-label="Type" style="width:78px"><span class="acc-pill">Part</span></td>
         <td class="col-tag" data-label="Tag" style="width:118px"></td>
         <td data-label="Mfr" style="width:120px"><input list="memMfr" value="${esc(a.mfr??'')}" placeholder="MISC." ${da} data-f="accmfr"></td>
         <td data-label="Part #" style="width:130px" class="col-part">${txtField(a.part, da, 'accpart', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:a.part})}</td>
@@ -6238,7 +6238,7 @@ function renderShipping(){
       ? `<td style="min-width:180px" class="mirror"><span class="acc-tag-ship">${esc(l.desc)||'<span class="dim">accessory</span>'}</span></td>`
       : `<td style="min-width:180px" class="mirror">${esc(l.desc)||'<span class="dim">—</span>'}</td>`;
     const catCell = isAcc
-      ? `<td style="min-width:70px"><span class="acc-pill">Acc</span></td>`
+      ? `<td style="min-width:70px"><span class="acc-pill">Part</span></td>`
       : `<td style="min-width:70px">${esc(l.kind)}${l.isLinear?` <span class="lin-pill">${l.tag==='Track Lighting'?'Trk':'Lin'}</span>`:''}${l.isCO?` <span class="co-pill">CO</span>`:''}</td>`;
     const addPiece = l.isLinear
       ? `<button class="add-piece-btn no-print" title="Add a length/piece line" onclick="addPiece('${l.id}')">+ pc</button>` : '';
