@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.70.1";
+const APP_VERSION = "1.71.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1011,7 +1011,7 @@ const COLW_KEY = 'lbom_colw_v1';
 let colWidths = loadColWidths();
 function loadColWidths(){ try{ const v=JSON.parse(localStorage.getItem(COLW_KEY)); return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; } }
 function saveColWidths(){ try{ localStorage.setItem(COLW_KEY, JSON.stringify(colWidths)); }catch(e){} }
-const COL_DEFAULTS = {qty:54,type:78,tag:118,mfr:130,part:150,desc:210,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:165,notes:150,actions:110};
+const COL_DEFAULTS = {qty:54,type:92,tag:118,mfr:130,part:150,desc:210,unitCost:88,mfrMult:62,markup:78,unitSell:88,extCost:96,extSell:104,source:165,notes:150,actions:110};
 const TEXT_COLS = new Set(['part','desc','source','notes']);
 function colKeyForField(field){
   if(field==='part'||field==='accpart') return 'part';
@@ -1024,6 +1024,7 @@ function colKeyForField(field){
 /* ================= UI state: collapse + settings ================= */
 const accExpanded = new Set();    // fixture row ids whose accessories are shown (default: hidden)
 const secCollapsed = new Set();   // section divider ids that are collapsed
+const svcCollapsed = new Set();   // services group ids that are collapsed
 const catCollapsed = new Set();   // top-level category blocks (fixtures/controls/services) folded away
 const cardExpanded = new Set();   // row ids whose phone card is open for editing (default: collapsed synopsis)
 /* Phone card view shows a compact synopsis per row with an Edit toggle; this
@@ -1109,6 +1110,7 @@ function bulkBar(){
 }
 function toggleAcc(rowId){ if(accExpanded.has(rowId)) accExpanded.delete(rowId); else accExpanded.add(rowId); render(); }
 function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); else secCollapsed.add(id); render(); }
+function toggleSvcGroup(id){ if(svcCollapsed.has(id)) svcCollapsed.delete(id); else svcCollapsed.add(id); render(); }
 function toggleCat(key){ if(catCollapsed.has(key)) catCollapsed.delete(key); else catCollapsed.add(key); render(); }
 
 /* ===== Custom Tag autocomplete =====================================================
@@ -1761,11 +1763,11 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <div class="cs-fig">${qtyVal(r.qty)||0} × ${money(c.unitSell)} <b>${money(c.extSell)}</b></div>
       <button class="cs-edit" onclick="toggleCardEdit('${r.id}')">${expanded?'Done ▾':'Edit ▸'}</button>
     </td>`;
-    return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${linkCls}${picking}${expanded?' card-open':' card-collapsed'}"${stripeStyle}>
+    return `<tr data-rk="${kind}" data-ri="${i}"${linkAttr} class="${allowAccessories?'fx-row':''}${linkCls}${picking}${expanded?' card-open':' card-collapsed'}"${stripeStyle}>
       ${summaryCell}
       ${selCell(r)}
       <td data-label="Qty" style="width:54px"><input class="num" inputmode="numeric" value="${qtyVal(r.qty)}" placeholder="0" ${da} data-f="qty"></td>
-      <td data-label="Type" style="width:78px"><input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></td>
+      <td data-label="Type" style="width:92px"><div class="type-cell">${allowAccessories?`<button class="addpart-btn no-print" tabindex="-1" title="Add a part / accessory to this fixture" onclick="openAddPart(event,'${kind}',${i})">⊕</button>`:''}<input class="up" list="memType" value="${esc(r.type)}" placeholder="F1" ${da} data-f="type"></div></td>
       ${tagCell}
       <td data-label="Mfr" style="width:120px"><input list="${allowAccessories?'memMfr':'ctrlMfr'}" value="${esc(r.mfr??'')}" placeholder="Manufacturer" ${da} data-f="mfr"></td>
       <td data-label="Part #" style="width:130px" class="col-part">${txtField(r.part, da, 'part', 'Part number', {cls:'partno', style:'font-family:var(--mono)', title:r.part})}</td>
@@ -1781,7 +1783,6 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <td style="width:110px" class="no-print row-actions card-actions">
         ${selCol?'':`<input type="checkbox" class="bom-check" data-id="${r.id}" tabindex="-1" title="Select for bulk edit (Shift-click for a range)" ${bomSel.has(r.id)?'checked':''} onclick="bomCheckClick(event,'${kind}','${r.id}')">`}
         ${linkBtn}
-        ${allowAccessories?`<span class="acc-menu" data-accmenu="${kind}_${i}"><button class="rowact" tabindex="-1" title="Add a part / accessory to this fixture group" onclick="toggleAccMenu('${kind}_${i}')">⊕</button><span class="acc-menu-list" id="accmenu_${kind}_${i}" style="display:none">${accessoryPresets().map((p,pi)=>`<button onclick="addAccessory('${kind}',${i},${pi})">${esc(p.label)}</button>`).join('')}</span></span>`:''}
         <button class="rowact star" tabindex="-1" title="Save this part to your library" onclick="savePartFromRow('${kind}',${i})">★</button>
         <button class="rowact" tabindex="-1" title="Duplicate this row" onclick="dupRow('${kind}',${i})">⎘</button>
         <button class="rowdel" tabindex="-1" title="Delete ${allowAccessories?'fixture':'control'}" onclick="delRow('${kind}',${i})">✕</button>
@@ -2064,15 +2065,19 @@ function servicesTable(opt){
       return lineRow + addonsHTML;
     }).join('');
     const gTot = servicesTotals([g]);
-    return `<tr class="section-row"><td colspan="${NC}"><div class="section-cell">
-        <span class="sx">▸ SERVICES</span>
+    const gCol = svcCollapsed.has(g.id);
+    const lineCount = (g.rows||[]).length;
+    const header = `<tr class="section-row"><td colspan="${NC}"><div class="section-cell">
+        <button class="sec-toggle no-print" title="${gCol?'Expand':'Collapse'} this services group" onclick="toggleSvcGroup('${g.id}')">${gCol?'▸':'▾'}</button>
+        <span class="sx">SERVICES</span>
         <input value="${esc(g.name)}" placeholder="Services group" data-svc-gname="${gi}">
         <span class="section-sub">Sell <b>${money(gTot.sell)}</b></span>
+        ${gCol?`<span class="cat-folded">${lineCount} line${lineCount===1?'':'s'}</span>`:''}
         <button class="rowact no-print" title="Save this group as a reusable template" onclick="saveServiceGroupAsTemplate(${gi})">★ Save as template</button>
         <button class="rowdel no-print" title="Delete services group" onclick="delServiceGroup(${gi})">✕</button>
-      </div></td></tr>
-      ${rowsHTML}
-      <tr class="acc-row no-print"><td class="acc-add-cell" colspan="${NC}">
+      </div></td></tr>`;
+    if(gCol) return header;
+    return header + rowsHTML + `<tr class="acc-row no-print"><td class="acc-add-cell" colspan="${NC}">
         <button class="acc-add-btn" onclick="addService(${gi})">+ Add service line</button>
       </td></tr>`;
   }).join('');
@@ -3041,6 +3046,44 @@ function toggleAccMenu(key){
 }
 function closeAccMenus(){ document.querySelectorAll('.acc-menu-list').forEach(m=>m.style.display='none'); }
 document.addEventListener('click', e=>{ if(!e.target.closest('.acc-menu')) closeAccMenus(); });
+
+/* ---- "Add a part" popover (fixtures) ----
+   The picker is anchored to the ⊕ button beside each fixture's Type box, but is
+   rendered as a fixed-position element on <body> so it can never be clipped by the
+   horizontally-scrolling table (the old in-cell dropdown got cut off near the
+   window edge). It flips up / left when there isn't room below or to the right. */
+let _addPartTarget = null;
+function _ensureAddPartPop(){
+  let pop = document.getElementById('addPartPop');
+  if(!pop){ pop = document.createElement('div'); pop.id='addPartPop'; pop.className='add-part-pop'; pop.hidden=true; document.body.appendChild(pop); }
+  return pop;
+}
+function openAddPart(ev, kind, i){
+  ev.stopPropagation();
+  const btn = ev.currentTarget;
+  const pop = _ensureAddPartPop();
+  const presets = accessoryPresets();
+  pop.innerHTML = presets.map((p,pi)=>`<button type="button" onclick="pickAddPart(${pi})">${esc(p.label)}</button>`).join('');
+  _addPartTarget = {kind, i};
+  pop.hidden = false; pop.style.visibility='hidden'; pop.style.left='0px'; pop.style.top='0px';
+  const r = btn.getBoundingClientRect();
+  const pw = pop.offsetWidth, ph = pop.offsetHeight, M = 8;
+  let left = r.left;
+  if(left + pw > window.innerWidth - M) left = Math.max(M, window.innerWidth - M - pw);
+  let top = r.bottom + 4;
+  if(top + ph > window.innerHeight - M) top = Math.max(M, r.top - 4 - ph); // flip up
+  pop.style.left = left+'px'; pop.style.top = top+'px'; pop.style.visibility='visible';
+}
+function pickAddPart(pi){
+  if(!_addPartTarget) return;
+  const {kind, i} = _addPartTarget;
+  closeAddPart();
+  addAccessory(kind, i, pi);   // re-renders the table
+}
+function closeAddPart(){ const pop=document.getElementById('addPartPop'); if(pop) pop.hidden=true; _addPartTarget=null; }
+document.addEventListener('click', e=>{ if(!e.target.closest('#addPartPop') && !e.target.closest('.addpart-btn')) closeAddPart(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAddPart(); });
+window.addEventListener('scroll', closeAddPart, true);
 
 /* ---- Services actions ---- */
 function ensureServices(){ const o=state.options[state.current]; if(!o.services) o.services=[]; return o.services; }

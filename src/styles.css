@@ -615,6 +615,29 @@
   /* The part/accessory menu now lives in the row's action cell (far right), so
      open it leftward from the button instead of off the right edge of the table. */
   .row-actions .acc-menu-list{left:auto;right:0}
+  /* "Add a part" lives beside the fixture's Type box; ⊕ button + the type input */
+  .type-cell{display:flex;align-items:center;gap:3px}
+  .type-cell input{flex:1;min-width:0}
+  .addpart-btn{flex:0 0 auto;width:19px;height:21px;padding:0;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--rule-dark);border-radius:3px;background:transparent;color:var(--amber-deep);
+    font-size:.82rem;line-height:1;cursor:pointer}
+  .addpart-btn:hover{background:var(--amber-wash);border-color:var(--amber-deep)}
+  body.dark .addpart-btn:hover{background:#2A2310}
+  /* The part picker — a fixed popover on <body> so the table's horizontal scroll
+     can never clip it (the old in-cell dropdown got cut off at the window edge). */
+  .add-part-pop{position:fixed;z-index:200;background:var(--sheet);border:1px solid var(--ink);
+    border-radius:4px;min-width:172px;box-shadow:0 6px 20px rgba(0,0,0,.22);padding:2px 0;
+    max-height:60vh;overflow-y:auto}
+  .add-part-pop[hidden]{display:none}
+  .add-part-pop button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--rule);
+    background:transparent;color:var(--ink);padding:7px 14px;font-size:.78rem;font-weight:500;border-radius:0;cursor:pointer}
+  .add-part-pop button:last-child{border-bottom:none}
+  .add-part-pop button:hover{background:var(--amber-wash);color:var(--amber-deep)}
+  body.dark .add-part-pop button:hover{background:#2A2310}
+  /* Group each fixture with its parts: a rule above every fixture row separates one
+     fixture group (e.g. AA Housing + its parts) from the next (e.g. LQ linear). */
+  tr.fx-row > td{border-top:2px solid var(--rule-dark)}
+  body.dark tr.fx-row > td{border-top-color:#3A3F4C}
   /* Group roll-up shown next to the "N parts" collapse toggle */
   .grp-sub{margin-left:12px;font-family:var(--mono);font-size:.72rem;color:var(--ink-soft)}
   .grp-sub b{color:var(--sell)}
