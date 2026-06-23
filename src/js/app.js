@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.64.0";
+const APP_VERSION = "1.65.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -5769,12 +5769,68 @@ function buildPrintBanner(){
     </div>
   </div>`;
 }
+/* Which BOM columns to print — chosen in the print dialog, persisted locally and
+   applied only while printing (the on-screen Columns view is left untouched). */
+const BOM_PRINT_KEY = 'lbom_bomprintcols_v1';
+const BOM_CLIENT_HIDDEN = ['unitCost','mfrMult','markup','extCost','source'];   // hide internal cost/markup
+let bomPrintHidden = (()=>{ try{ const a=JSON.parse(localStorage.getItem(BOM_PRINT_KEY)); return new Set(Array.isArray(a)?a:[]); }catch(e){ return new Set(); } })();
+function saveBomPrintCols(){ try{ localStorage.setItem(BOM_PRINT_KEY, JSON.stringify([...bomPrintHidden])); }catch(e){} }
+/* Apply the print column choice to the live BOM tables. Browsers mis-handle
+   <col visibility:collapse> for non-adjacent columns, so we hide reliably with
+   per-cell display:none plus col width:0. Body rows lead with a card-summary cell
+   the header lacks, so body indexes are offset by one. A render() (in afterprint)
+   rebuilds the tables clean, restoring every column. */
+function applyBomPrintCols(){
+  document.querySelectorAll('.bom-table').forEach(table=>{
+    const cols = Array.from(table.querySelectorAll('colgroup col'));
+    const keyAt = cols.map(c=>c.getAttribute('data-col'));
+    const hide = keyAt.map(k=> !!(k && bomPrintHidden.has(k)));
+    cols.forEach((c,i)=>{ if(hide[i]) c.style.width = '0'; });
+    if(table.tHead) Array.from(table.tHead.rows).forEach(r=>{
+      if(r.cells.length === keyAt.length) for(let i=0;i<keyAt.length;i++){ if(hide[i]) r.cells[i].style.display='none'; }
+    });
+    Array.from(table.tBodies).forEach(tb=> Array.from(tb.rows).forEach(r=>{
+      const off = (r.cells[0] && r.cells[0].classList && r.cells[0].classList.contains('card-summary')) ? 1 : 0;
+      if(r.cells.length - off !== keyAt.length) return;        // colspan utility rows
+      for(let i=0;i<keyAt.length;i++){ if(hide[i]) r.cells[i+off].style.display='none'; }
+    }));
+  });
+}
+function openBomPrint(){
+  const cols = HIDEABLE_COLS.map(([k,label])=>`<label class="set-opt" style="padding:6px 10px;margin-bottom:4px"><input type="checkbox" data-bomcol="${k}" ${bomPrintHidden.has(k)?'':'checked'}> ${esc(label)}</label>`).join('');
+  const body = `<p class="paste-help">Choose which columns to print. <b>Qty</b> and <b>Type</b> always print. <b>All</b> shows everything; <b>Client</b> hides Unit cost, Mfr ×, Markup, Ext. cost and Price source; <b>Custom</b> is your own pick.</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="ghost" data-preset="all">All</button>
+      <button class="ghost" data-preset="client">Client</button>
+      <button class="ghost" data-preset="custom" title="Pick columns below">Custom</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px">${cols}</div>`;
+  openModal({
+    title:'Print bill of materials', bodyHTML:body, wide:true, confirmLabel:'Print', cancelLabel:'Cancel',
+    onConfirm(){ saveBomPrintCols(); closeModal(); _doBomPrint(); },
+    onOpen(back){
+      const boxes = back.querySelectorAll('[data-bomcol]');
+      const reflect = ()=> boxes.forEach(cb=>{ cb.checked = !bomPrintHidden.has(cb.dataset.bomcol); });
+      back.querySelectorAll('[data-preset]').forEach(b=> b.addEventListener('click', ()=>{
+        const pre=b.dataset.preset;
+        if(pre==='all') bomPrintHidden = new Set();
+        else if(pre==='client') bomPrintHidden = new Set(BOM_CLIENT_HIDDEN);
+        if(pre!=='custom') reflect();
+      }));
+      boxes.forEach(cb=> cb.addEventListener('change', ()=>{ if(cb.checked) bomPrintHidden.delete(cb.dataset.bomcol); else bomPrintHidden.add(cb.dataset.bomcol); }));
+    }
+  });
+}
+function _doBomPrint(){
+  /* The beforeprint handler builds the banner, forces wrap and applies the
+     chosen print columns — here we just open the print dialog. */
+  setTimeout(()=>{ try{ window.print(); }catch(e){ toast('Use your browser menu → Print'); } }, 60);
+}
 /* Print / PDF — routes to the right output for the current view */
 function printEstimate(){
   if(view === 'shipping'){ openShipPrint(); return; }
   if(view === 'advice'){ printAdvices(); return; }
-  buildPrintBanner();
-  setTimeout(()=>{ try{ window.print(); }catch(e){ toast('Use your browser menu → Print'); } }, 60);
+  openBomPrint();
 }
 
 /* Printable Ship Advices — laid out to match the Shipping Schedule template's
@@ -6071,17 +6127,22 @@ function _beforePrintLight(){
      / Description text expands to fit instead of clipping to one line. */
   if(view === 'estimate'){
     buildPrintBanner();
+    /* The printout reflects the print-column dialog only, not the on-screen
+       Columns view — drop the screen hide-col classes for the duration. */
+    HIDEABLE_COLS.forEach(([k])=> document.body.classList.remove('hide-col-'+k));
     if(uiSettings.colText !== 'wrap'){
       _printPrevColText = uiSettings.colText;
       uiSettings.colText = 'wrap';
       document.body.classList.add('coltext-wrap'); document.body.classList.remove('coltext-fit');
       render();
     }
+    applyBomPrintCols();            // apply AFTER any render so the hiding sticks
   }
 }
 function _afterPrintRestore(){
   if(_printWasDark){ document.body.classList.add('dark'); _printWasDark = false; }
-  if(_printPrevColText !== null){ uiSettings.colText = _printPrevColText; _printPrevColText = null; applySettings(); render(); }
+  if(_printPrevColText !== null){ uiSettings.colText = _printPrevColText; _printPrevColText = null; applySettings(); }
+  if(view === 'estimate'){ render(); applyColVis(); }   // rebuild clean + restore on-screen columns
 }
 window.addEventListener('beforeprint', _beforePrintLight);
 window.addEventListener('afterprint', _afterPrintRestore);

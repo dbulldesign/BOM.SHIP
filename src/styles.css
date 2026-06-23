@@ -762,11 +762,12 @@
        the slim banner above (logo · Bill of Materials · job) is the only heading. */
     .titleblock, .hint, .save-stamp, .backups-note{ display:none !important; }
 
-    /* Fit the whole BOM across the landscape width instead of running off the page */
+    /* Fit the whole BOM across the landscape width instead of running off the page.
+       table-layout:auto shrinks columns to fit the page; hidden columns are removed
+       with per-cell display:none (reliable, unlike <col> visibility:collapse). */
     .section .table-scroll{ overflow:visible !important; }
     .bom-table, .svc-table{ width:100% !important; min-width:0 !important; table-layout:auto !important;
       font-size:7.5pt !important; }
-    .bom-table colgroup col, .svc-table colgroup col{ width:auto !important; }
     .bom-table .col-lead, .svc-table .col-lead, .card-summary, .sort-icon, .col-resizer{ display:none !important; }
     .bom-table th, .bom-table td, .svc-table th, .svc-table td{ overflow:visible !important; padding:2px 4px !important; }
     /* Only the free-text columns wrap; numbers and calc totals stay on one line */
