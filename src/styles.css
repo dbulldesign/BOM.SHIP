@@ -618,6 +618,15 @@
   /* Group roll-up shown next to the "N parts" collapse toggle */
   .grp-sub{margin-left:12px;font-family:var(--mono);font-size:.72rem;color:var(--ink-soft)}
   .grp-sub b{color:var(--sell)}
+  /* Collapse a whole top-level category (Light Fixtures / Lighting Controls / Services) */
+  .cat-toggle{border:none;background:transparent;cursor:pointer;font-size:1rem;line-height:1;
+    color:var(--ink-soft);padding:0 6px 0 0;margin:0}
+  .cat-toggle:hover{color:var(--ink)}
+  .cat-folded{margin-left:12px;font-family:var(--mono);font-size:.78rem;color:var(--ink-soft)}
+  .cat-folded b{color:var(--sell)}
+  .cat-collapsed .sec-add-bar,
+  .cat-collapsed .table-scroll{display:none}
+  .cat-collapsed .sec-foot{display:none}
   .accqty-inherit::placeholder{color:#C9A86C;font-style:italic}
   .sec-add-bar{display:flex;gap:8px;padding:6px 8px;border-bottom:1px solid var(--rule)}
   .sec-add-bar button{border-color:var(--rule-dark);font-weight:500;font-size:.78rem}

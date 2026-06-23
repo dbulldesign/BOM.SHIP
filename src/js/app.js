@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.68.0";
+const APP_VERSION = "1.69.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1024,6 +1024,7 @@ function colKeyForField(field){
 /* ================= UI state: collapse + settings ================= */
 const accExpanded = new Set();    // fixture row ids whose accessories are shown (default: hidden)
 const secCollapsed = new Set();   // section divider ids that are collapsed
+const catCollapsed = new Set();   // top-level category blocks (fixtures/controls/services) folded away
 const cardExpanded = new Set();   // row ids whose phone card is open for editing (default: collapsed synopsis)
 /* Phone card view shows a compact synopsis per row with an Edit toggle; this
    opens/closes the full labeled fields for that one row. No-op on desktop. */
@@ -1108,6 +1109,7 @@ function bulkBar(){
 }
 function toggleAcc(rowId){ if(accExpanded.has(rowId)) accExpanded.delete(rowId); else accExpanded.add(rowId); render(); }
 function toggleSection(id){ if(secCollapsed.has(id)) secCollapsed.delete(id); else secCollapsed.add(id); render(); }
+function toggleCat(key){ if(catCollapsed.has(key)) catCollapsed.delete(key); else catCollapsed.add(key); render(); }
 
 /* Global display settings (local to this browser). */
 const SETTINGS_KEY = 'lbom_settings_v1';
@@ -1833,9 +1835,13 @@ function sectionTable(kind, rows, defMarkup, label, tickClass){
       <button class="ghost" onclick="openLibrary('${kind}')" title="Insert a saved part from your library">★ Library</button>
       ${dupBtn}`;
 
-  return `<div class="section">
+  const catOpen = !catCollapsed.has(kind);
+  const rowCount = rows.filter(r=>!r.isSection).length;
+  return `<div class="section${catOpen?'':' cat-collapsed'}">
     <div class="sec-head">
+      <button class="cat-toggle no-print" title="${catOpen?'Collapse':'Expand'} ${label}" onclick="toggleCat('${kind}')">${catOpen?'▾':'▸'}</button>
       <span class="tick ${tickClass}"></span><h2>${label}</h2>
+      ${catOpen?'':`<span class="cat-folded">${rowCount} item${rowCount===1?'':'s'} · Sell <b>${money(tot.sell)}</b></span>`}
       <span class="sec-markup no-print">Default markup
         <span class="sec-mk-pair"><input inputmode="decimal" value="${defX}" placeholder="1.5" title="Multiplier (1.5) or percent (50%)" data-secmk="${kind}"></span>
         <span class="mk-hint">× or %</span>
@@ -2012,9 +2018,12 @@ function servicesTable(opt){
       </td></tr>`;
   }).join('');
 
-  return `<div class="section">
+  const svcOpen = !catCollapsed.has('services');
+  return `<div class="section${svcOpen?'':' cat-collapsed'}">
     <div class="sec-head">
+      <button class="cat-toggle no-print" title="${svcOpen?'Collapse':'Expand'} Services" onclick="toggleCat('services')">${svcOpen?'▾':'▸'}</button>
       <span class="tick svc"></span><h2>Services</h2>
+      ${svcOpen?'':`<span class="cat-folded">Sell <b>${money(tot.sell)}</b></span>`}
       <span class="sec-markup no-print" style="font-size:.7rem;color:var(--ink-soft)">Sell-only · no cost</span>
     </div>
     <div class="sec-add-bar no-print">
