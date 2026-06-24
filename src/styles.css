@@ -75,7 +75,11 @@
   .tab.active{background:var(--sheet);color:var(--ink);border-color:var(--ink);position:relative;top:1px;
     border-top:3px solid var(--amber)}
   .tab .tot{font-family:var(--mono);font-size:.72rem;color:var(--sell);font-weight:500}
-  .tab-add{border:1px dashed var(--rule-dark);background:transparent;color:var(--ink-soft)}
+  .tab[draggable]{cursor:grab}
+  .tab.tab-dragging{opacity:.45;cursor:grabbing}
+  .tab.tab-drop-l{box-shadow:inset 3px 0 0 var(--amber)}
+  .tab.tab-drop-r{box-shadow:inset -3px 0 0 var(--amber)}
+  .tab-add{border:1px dashed var(--rule-dark);background:transparent;color:var(--ink-soft);cursor:pointer}
 
   /* ---------- Animated light/dark switch ---------- */
   .theme-switch{display:inline-flex;align-items:center;cursor:pointer;user-select:none;margin-left:2px}
@@ -700,6 +704,16 @@
   .cmp-body{margin-top:16px}
 
   /* cards row */
+  /* Pick which options to include in the comparison */
+  .cmp-pick{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:16px}
+  .cmp-pick-label{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .cmp-pick-chip{display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+    border:1px solid var(--rule-dark);border-radius:14px;padding:4px 12px 4px 9px;font-size:.8rem;
+    font-weight:600;color:var(--ink-soft);background:var(--paper);user-select:none}
+  .cmp-pick-chip:hover{border-color:var(--ink)}
+  .cmp-pick-chip.on{color:var(--ink);border-color:var(--amber-deep);background:var(--amber-wash)}
+  body.dark .cmp-pick-chip.on{background:#2A2310}
+  .cmp-pick-chip input{margin:0;cursor:pointer}
   .cmp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px}
   .cmp-card{border:2px solid var(--rule-dark);background:var(--sheet);padding:16px 16px 14px;position:relative;
     display:flex;flex-direction:column;gap:0;cursor:pointer;transition:border-color .15s}

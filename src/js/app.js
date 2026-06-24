@@ -11,7 +11,7 @@
  *   1) bump APP_VERSION below, 2) `node build.js`, commit,
  *   3) tag it `vX.Y.Z` and push — the GitHub Action builds & attaches the file.
  */
-const APP_VERSION = "1.71.0";
+const APP_VERSION = "1.72.0";
 const UPDATE_REPO = "dbulldesign/bom.ship";          // owner/repo on GitHub
 const UPDATE_API  = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
 
@@ -1633,7 +1633,10 @@ function render(){
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = state.options.map((o,i)=>{
     const t = optionTotals(o);
-    return `<button class="tab ${i===state.current?'active':''}" onclick="selectOption(${i})">
+    return `<button class="tab ${i===state.current?'active':''}" onclick="selectOption(${i})"
+      draggable="true" data-ti="${i}" title="Drag to reorder"
+      ondragstart="tabDragStart(event,${i})" ondragover="tabDragOver(event,${i})"
+      ondragleave="tabDragLeave(event)" ondrop="tabDrop(event,${i})" ondragend="tabDragEnd(event)">
       ${esc(o.name)} <span class="tot">${money(t.grand)}</span></button>`;
   }).join("") + `<button class="tab tab-add" onclick="addOption()">+ Add option</button>`;
 
@@ -2516,16 +2519,39 @@ function forAccessTable(opt, t){
 let cmpOpen = true;
 function toggleCmp(){ cmpOpen=!cmpOpen; renderCompare(); }
 
+/* Which options are included in the pricing comparison. null = all of them.
+   Kept as an ephemeral UI filter (by index); the panel re-renders fresh each time. */
+let cmpInclude = null;
+function cmpIncludedIdx(){
+  const all = state.options.map((_,i)=>i);
+  if(!cmpInclude) return all;
+  const inc = all.filter(i=>cmpInclude.has(i));
+  return inc.length>=2 ? inc : all;   // never compare fewer than two
+}
+function toggleCmpOpt(i){
+  if(!cmpInclude) cmpInclude = new Set(state.options.map((_,k)=>k));
+  if(cmpInclude.has(i)){
+    if(cmpInclude.size<=2){ toast('Keep at least two options to compare'); return; }
+    cmpInclude.delete(i);
+  } else cmpInclude.add(i);
+  renderCompare();
+}
+
 function renderCompare(){
   const el = document.getElementById("compare");
   if(state.options.length < 2){ el.innerHTML=""; return; }
 
-  const tots = state.options.map(o=>optionTotals(o));
+  const allTots = state.options.map(o=>optionTotals(o));
+  const inc = cmpIncludedIdx();                 // option indices being compared (≥2)
+  const incSet = new Set(inc);
+  const tots = inc.map(i=>allTots[i]);
   const grands = tots.map(t=>t.grand);
   const maxGrand = Math.max(...grands);
   const minGrand = Math.min(...grands);
-  const minIdx = grands.indexOf(minGrand);
-  const maxIdx = grands.indexOf(maxGrand);
+  const cheapestIdx = inc[grands.indexOf(minGrand)];
+  const priciestIdx = inc[grands.indexOf(maxGrand)];
+  /* delta/marker baseline: the viewed option if it's in the set, else the first compared one */
+  const refIdx = incSet.has(state.current) ? state.current : inc[0];
 
   /* ---- option accent colours (cycle through a palette) ---- */
   const PALETTES = [
@@ -2537,13 +2563,24 @@ function renderCompare(){
     {bar:"#4A7A6B",light:"#EEF5F3"},
   ];
 
+  /* ---- option picker (which options to compare) ---- */
+  const picker = `<div class="cmp-pick no-print">
+    <span class="cmp-pick-label">Compare:</span>
+    ${state.options.map((o,i)=>{
+      const on = incSet.has(i);
+      return `<label class="cmp-pick-chip${on?' on':''}" title="${on?'Click to remove from the comparison':'Click to add to the comparison'}">
+        <input type="checkbox" ${on?'checked':''} onclick="toggleCmpOpt(${i})">${esc(o.name)}</label>`;
+    }).join("")}
+  </div>`;
+
   /* ---- cards ---- */
-  const cards = state.options.map((o,i)=>{
-    const t = tots[i];
-    const pal = PALETTES[i % PALETTES.length];
-    const isActive = i === state.current;
-    const isCheapest = i === minIdx && maxGrand !== minGrand;
-    const isPriciest = i === maxIdx && maxGrand !== minGrand;
+  const cards = inc.map((optIdx)=>{
+    const o = state.options[optIdx];
+    const t = allTots[optIdx];
+    const pal = PALETTES[optIdx % PALETTES.length];
+    const isActive = optIdx === state.current;
+    const isCheapest = optIdx === cheapestIdx && maxGrand !== minGrand;
+    const isPriciest = optIdx === priciestIdx && maxGrand !== minGrand;
     const savings = maxGrand - t.grand;
     const premium = t.grand - minGrand;
 
@@ -2563,7 +2600,7 @@ function renderCompare(){
 
     const margin = t.sub>0 ? ((t.sub-t.cost)/t.sub*100).toFixed(1) : "0.0";
 
-    return `<div class="cmp-card${isActive?' active':''}${isCheapest&&!isActive?' cheapest':''}" onclick="selectOption(${i})">
+    return `<div class="cmp-card${isActive?' active':''}${isCheapest&&!isActive?' cheapest':''}" onclick="selectOption(${optIdx})">
       ${badge}
       <div class="cmp-card-name">${esc(o.name)}</div>
       <div class="cmp-bar-wrap">
@@ -2590,30 +2627,31 @@ function renderCompare(){
         <span class="rl">Total with tax</span><span class="rv">${money(t.grand)}</span>
       </div>
       ${savingsTag}
-      <button class="cmp-card-goto no-print" onclick="event.stopPropagation();selectOption(${i})">View option →</button>
+      <button class="cmp-card-goto no-print" onclick="event.stopPropagation();selectOption(${optIdx})">View option →</button>
     </div>`;
   }).join("");
 
   /* ---- detail table ---- */
-  const anyCO = state.options.some(o=>(o.changeOrders||[]).length);
+  const anyCO = inc.some(i=>(state.options[i].changeOrders||[]).length);
   function detailRow(label, fn, opts){
     opts = opts || {};
-    const vals = tots.map(fn);
-    const minV = Math.min(...vals);
-    const curV = vals[state.current];
-    const cells = vals.map((v,i)=>{
-      const low = v===minV && Math.max(...vals)!==minV && opts.highlightLow;
-      const delta = v - curV;
-      const deltaTxt = (opts.showDelta && i!==state.current && delta!==0)
+    const vals = inc.map(i=>fn(allTots[i]));
+    const minV = Math.min(...vals), maxV = Math.max(...vals);
+    const refV = fn(allTots[refIdx]);
+    const cells = inc.map((optIdx,pos)=>{
+      const v = vals[pos];
+      const low = v===minV && maxV!==minV && opts.highlightLow;
+      const delta = v - refV;
+      const deltaTxt = (opts.showDelta && optIdx!==refIdx && delta!==0)
         ? `<span class="cmp-delta ${delta>0?'up':'down'}">${delta>0?'+':'−'}${money(Math.abs(delta))}</span>` : '';
       return `<td style="text-align:right" class="${low?'low':''}">${money(v)}${deltaTxt}</td>`;
     }).join("");
-    if(opts.sect) return `<tr class="sect-head"><td colspan="${1+tots.length}">${label}</td></tr>`;
+    if(opts.sect) return `<tr class="sect-head"><td colspan="${1+inc.length}">${label}</td></tr>`;
     if(opts.grand) return `<tr class="grand-tr"><td>${label}</td>${cells}</tr>`;
     return `<tr class="${opts.muted?'cmp-muted-row':''}"><td>${label}</td>${cells}</tr>`;
   }
 
-  const thCols = state.options.map((o,i)=>`<th style="text-align:right">${esc(o.name)}${i===state.current?`<span class="cmp-cur-marker">●</span>`:''}</th>`).join("");
+  const thCols = inc.map((optIdx)=>`<th style="text-align:right">${esc(state.options[optIdx].name)}${optIdx===state.current?`<span class="cmp-cur-marker">●</span>`:''}</th>`).join("");
 
   const detailRows = [
     detailRow("Fixtures", t=>t.f.sell, {}),
@@ -2627,17 +2665,20 @@ function renderCompare(){
   ].join("");
 
   const openClass = cmpOpen ? "open" : "";
+  const cntLabel = inc.length < state.options.length
+    ? `${inc.length} of ${state.options.length}` : `${state.options.length}`;
 
   el.innerHTML = `
     <button class="cmp-toggle ${openClass} no-print" onclick="toggleCmp()">
       <span class="cmp-toggle-bar"></span>
       <span class="cmp-toggle-label">
-        Option comparison (${state.options.length})
+        Option comparison (${cntLabel})
         <span class="caret">▼</span>
       </span>
       <span class="cmp-toggle-bar"></span>
     </button>
     <div class="cmp-body" style="display:${cmpOpen?'block':'none'}">
+      ${picker}
       <div class="cmp-cards">${cards}</div>
       <div class="cmp-detail">
         <table>
@@ -3504,6 +3545,23 @@ function importLibrary(kind, text){
 }
 
 function addOption(){ const o=blankOption("Option "+(state.options.length+1)); applyDefaultsToOption(o, ensureDefaults()); state.options.push(o); state.current=state.options.length-1; markDirty(); render(); }
+
+/* ---- Drag option tabs to reorder them ---- */
+let _tabDrag = null;
+function tabDragStart(e,i){ _tabDrag=i; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',String(i));}catch(_){ } e.currentTarget.classList.add('tab-dragging'); }
+function tabDragOver(e,i){ if(_tabDrag===null||i===_tabDrag) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; e.currentTarget.classList.add(i<_tabDrag?'tab-drop-l':'tab-drop-r'); }
+function tabDragLeave(e){ e.currentTarget.classList.remove('tab-drop-l','tab-drop-r'); }
+function tabDrop(e,i){ e.preventDefault(); const from=_tabDrag; tabDragEnd(e); if(from!==null) moveOption(from,i); }
+function tabDragEnd(e){ _tabDrag=null; document.querySelectorAll('.tab-drop-l,.tab-drop-r,.tab-dragging').forEach(el=>el.classList.remove('tab-drop-l','tab-drop-r','tab-dragging')); }
+function moveOption(from,to){
+  if(from===to||from==null||to==null) return;
+  const opts=state.options, cur=opts[state.current];
+  const [m]=opts.splice(from,1);
+  opts.splice(to,0,m);
+  state.current=opts.indexOf(cur);   // keep viewing the same option after the move
+  cmpInclude=null;                   // indices shifted — reset the compare filter to all
+  markDirty(); render();
+}
 /* Switching the active option is not itself an undoable edit. Flush any pending
    edit into history, switch, then re-sync the history base so undo doesn't jump tabs. */
 function selectOption(i){ commitHistory(); state.current=i; render(); _historyBase = snapshot(); updateUndoButtons(); }
